@@ -77,6 +77,7 @@ namespace game
 
 	using Move = std::vector<Jump>;
 	void operator+=(std::vector<Move>&, std::vector<Move>&&);
+	bool is_kills(std::vector<Move> const&);
 	//std::vector<Move> operator+(std::vector<Move>&&, std::vector<Move>&&);
 
 	class Board

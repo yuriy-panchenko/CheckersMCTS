@@ -141,7 +141,7 @@ namespace game
 						for (auto& mv : mvs)
 						{
 							mv.insert(mv.begin(), j);
-							ret.push_back(mv);
+							ret.push_back(std::move(mv));
 						}
 					else ret.push_back({ j });
 				}
@@ -166,27 +166,80 @@ namespace game
 		if (p->rank == Rank::Pawn)
 		{
 			auto murder{ test_kill(make_pawn_kill_jump(true,true)) };
-			murder += test_kill(make_pawn_kill_jump(true, false));
-			
-			murder += test_kill(make_pawn_kill_jump(false, true));
-			murder += test_kill(make_pawn_kill_jump(false, false));
+			auto src{ test_kill(make_pawn_kill_jump(true, false)) };
+			murder.insert(murder.end(), std::make_move_iterator(src.begin()), std::make_move_iterator(src.end()));
+
+			src = test_kill(make_pawn_kill_jump(false, true));
+			murder.insert(murder.end(), std::make_move_iterator(src.begin()), std::make_move_iterator(src.end()));
+			src = test_kill(make_pawn_kill_jump(false, false));
+			murder.insert(murder.end(), std::make_move_iterator(src.begin()), std::make_move_iterator(src.end()));
+
 
 			if (murder.empty())
 			{
-				moves += test_move({ pos, pos + Position{ Row{p->color == Color::White ? -1 : 1}, Column{-1} } });
-				moves += test_move({ pos, pos + Position{ Row{p->color == Color::White ? -1 : 1}, Column{+1} } });
+				auto src{ test_move({ pos, pos + Position{ Row{p->color == Color::White ? -1 : 1}, Column{-1} } }) };
+				moves.insert(moves.end(), std::make_move_iterator(src.begin()), std::make_move_iterator(src.end()));
+				src = test_move({ pos, pos + Position{ Row{p->color == Color::White ? -1 : 1}, Column{+1} } });
+				moves.insert(moves.end(), std::make_move_iterator(src.begin()), std::make_move_iterator(src.end()));
 			}
-			else kills += std::move(murder);
+			else
+				kills.insert(kills.end(), std::make_move_iterator(murder.begin()), std::make_move_iterator(murder.end()));
 		}
 		else
 		{
-			auto test_queen_diagonal = [](Position dir)->std::vector<Move> {};
-			auto murder{ test_queen_diagonal({ Row{-1}, Column{-1} }) };
+			auto test_queen_diagonal = [this, pos](Position dir)->std::vector<Move>
+				{
+					assert(pos);
+					std::vector<Move> mvs;
+
+					auto pos2{ pos + dir };
+
+					for (; pos2; pos2 += dir)
+						if ((*this)[pos2])
+							if ((*this)[pos2]->color == (*this)[pos]->color)
+								return mvs;
+							else break;
+						else mvs.push_back({ {pos, pos2} });
+
+					if (pos2)
+					{
+						std::vector<Move> kills;
+						auto kill_pos{ pos2 };
+
+						for (pos2 += dir; pos2; pos2 += dir)
+							if ((*this)[pos2])
+								break;
+							else
+							{
+								Jump const j{ pos, pos2, kill_pos };
+								auto brd{ *this };
+								brd.MakeJump(j);
+								auto possible{ brd.available_moves(pos2) };
+
+								if (possible.empty() || !is_kills(possible))
+									kills.push_back({ j });
+								else for (auto& mv : possible)
+								{
+									mv.insert(mv.begin(), j);
+									kills.push_back(std::move(mv));
+								}
+							}
+						mvs += std::move(kills);
+					}
+
+					return mvs;
+				};
+
+			auto qMoves{ test_queen_diagonal({ Row{-1}, Column{-1} }) };
+			qMoves += test_queen_diagonal({ Row{-1}, Column{+1} });
+			qMoves += test_queen_diagonal({ Row{+1}, Column{-1} });
+			qMoves += test_queen_diagonal({ Row{+1}, Column{+1} });
+
+			auto& dst{ is_kills(qMoves) ? kills : moves };
+			dst.insert(dst.end(), std::make_move_iterator(qMoves.begin()), std::make_move_iterator(qMoves.end()));
 		}
 
-		if (kills.empty())
-			return moves;
-		else return kills;
+		return kills.empty() ? moves : kills;
 	}
 
 	bool Board::MakeJump(Jump j)
@@ -269,12 +322,31 @@ namespace game
 
 	void operator+=(std::vector<Move>& dst, std::vector<Move>&& src)
 	{
-		assert(false);
+		if (src.empty())
+			return;
+
+		if (dst.empty())
+		{
+			dst = std::move(src);
+			return;
+		}
+
+		if (is_kills(dst) == is_kills(src))
+			dst.insert(dst.end(), std::make_move_iterator(src.begin()), std::make_move_iterator(src.begin()));
+		else if (is_kills(src))
+			dst = src;
 	}
 
-	std::vector<Move> operator+(std::vector<Move>&& v1, std::vector<Move>&& v2)
+	bool is_kills(std::vector<Move> const& v)
+	{
+		if (v.empty())
+			return false;
+		return v.front().front().IsKiller();
+	}
+
+	/*std::vector<Move> operator+(std::vector<Move>&& v1, std::vector<Move>&& v2)
 	{
 		v1 += std::move(v2);
 		return v1;
-	}
+	}*/
 }
