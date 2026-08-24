@@ -4,21 +4,26 @@
 
 
 #pragma once
-
+#include "defines.h"
 
 class CCheckersDoc : public CDocument
 {
+	using Moves = std::vector<game::Move>;
 protected: // create from serialization only
 	CCheckersDoc() noexcept;
 	DECLARE_DYNCREATE(CCheckersDoc)
 
-// Attributes
+	// Attributes
+public:
+	game::Board const& GetBoard()const;
+	BOOL IsMoveable(game::Position)const;
+	BOOL IsPossible2Move2(game::Position root, game::Position testPos)const;
+	game::Move FindMove(game::Position from, game::Position to)const;
+	void MakeMove(game::Move const&);
+	// Operations
 public:
 
-// Operations
-public:
-
-// Overrides
+	// Overrides
 public:
 	virtual BOOL OnNewDocument();
 	virtual void Serialize(CArchive& ar);
@@ -27,7 +32,7 @@ public:
 	virtual void OnDrawThumbnail(CDC& dc, LPRECT lprcBounds);
 #endif // SHARED_HANDLERS
 
-// Implementation
+	// Implementation
 public:
 	virtual ~CCheckersDoc();
 #ifdef _DEBUG
@@ -36,13 +41,25 @@ public:
 #endif
 
 protected:
-
-// Generated message map functions
+	static void AutoMoveProc(HWND, UINT, UINT_PTR, DWORD);
+	// Generated message map functions
 protected:
+	afx_msg void OnUpdateIdsIndicatorWhite(CCmdUI* pCmdUI);
+	afx_msg void OnUpdateIdsIndicatorPossibleMoves(CCmdUI* pCmdUI);
+	afx_msg void OnUpdateIdsIndicatorBlack(CCmdUI* pCmdUI);
 	DECLARE_MESSAGE_MAP()
 
 #ifdef SHARED_HANDLERS
 	// Helper function that sets search content for a Search Handler
 	void SetSearchContent(const CString& value);
 #endif // SHARED_HANDLERS
+
+private:
+	BOOL IsHuman(game::Color)const;
+	void EndGame();
+
+	BOOL m_isWhiteHuman, m_isBlackHuman;
+	game::Checkers m_Game;
+	Moves m_PossibleMoves;
+	UINT_PTR m_idTimer;
 };

@@ -32,9 +32,12 @@ END_MESSAGE_MAP()
 static UINT indicators[] =
 {
 	ID_SEPARATOR,           // status line indicator
-	ID_INDICATOR_CAPS,
-	ID_INDICATOR_NUM,
-	ID_INDICATOR_SCRL,
+	IDS_INDICATOR_WHITE,
+	IDS_INDICATOR_POSSIBLE_MOVES,
+	IDS_INDICATOR_BLACK,
+	//ID_INDICATOR_CAPS,
+	//ID_INDICATOR_NUM,
+	//ID_INDICATOR_SCRL,
 };
 
 // CMainFrame construction/destruction
@@ -243,7 +246,6 @@ LRESULT CMainFrame::OnToolbarCreateNew(WPARAM wp,LPARAM lp)
 void CMainFrame::OnApplicationLook(UINT id)
 {
 	CWaitCursor wait;
-
 	theApp.m_nAppLook = id;
 
 	switch (theApp.m_nAppLook)

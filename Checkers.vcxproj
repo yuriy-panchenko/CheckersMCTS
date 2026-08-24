@@ -200,6 +200,7 @@
     <ClInclude Include="Checkers.h" />
     <ClInclude Include="CheckersDoc.h" />
     <ClInclude Include="CheckersView.h" />
+    <ClInclude Include="defines.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="MainFrm.h" />
     <ClInclude Include="OutputWnd.h" />
@@ -211,6 +212,7 @@
     <ClCompile Include="Checkers.cpp" />
     <ClCompile Include="CheckersDoc.cpp" />
     <ClCompile Include="CheckersView.cpp" />
+    <ClCompile Include="defines.cpp" />
     <ClCompile Include="MainFrm.cpp" />
     <ClCompile Include="OutputWnd.cpp" />
     <ClCompile Include="pch.cpp">

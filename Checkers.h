@@ -24,6 +24,8 @@ public:
 public:
 	virtual BOOL InitInstance();
 	virtual int ExitInstance();
+	
+	CDocument* GetDocument();
 
 // Implementation
 	UINT  m_nAppLook;
@@ -35,6 +37,7 @@ public:
 
 	afx_msg void OnAppAbout();
 	DECLARE_MESSAGE_MAP()
+
 };
 
 extern CCheckersApp theApp;

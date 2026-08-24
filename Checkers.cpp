@@ -164,7 +164,7 @@ class CAboutDlg : public CDialogEx
 public:
 	CAboutDlg() noexcept;
 
-// Dialog Data
+	// Dialog Data
 #ifdef AFX_DESIGN_TIME
 	enum { IDD = IDD_ABOUTBOX };
 #endif
@@ -172,14 +172,13 @@ public:
 protected:
 	virtual void DoDataExchange(CDataExchange* pDX);    // DDX/DDV support
 
-// Implementation
+	// Implementation
 protected:
 	DECLARE_MESSAGE_MAP()
 };
 
 CAboutDlg::CAboutDlg() noexcept : CDialogEx(IDD_ABOUTBOX)
-{
-}
+{}
 
 void CAboutDlg::DoDataExchange(CDataExchange* pDX)
 {
@@ -208,14 +207,18 @@ void CCheckersApp::PreLoadState()
 }
 
 void CCheckersApp::LoadCustomState()
-{
-}
+{}
 
 void CCheckersApp::SaveCustomState()
-{
-}
+{}
 
 // CCheckersApp message handlers
 
-
+CDocument* CCheckersApp::GetDocument()
+{
+	if (m_pMainWnd)
+		if (auto pView{ ((CMainFrame*)m_pMainWnd)->GetActiveView() })
+			return pView->GetDocument();
+	return NULL;
+}
 
