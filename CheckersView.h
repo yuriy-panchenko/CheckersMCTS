@@ -3,7 +3,7 @@
 //
 
 #pragma once
-
+#include "CheckersDoc.h"
 
 class CCheckersView : public CView
 {
@@ -17,6 +17,7 @@ public:
 
 	// Operations
 public:
+	void UpdatePicture();
 
 	// Overrides
 public:
@@ -47,7 +48,6 @@ protected:
 private:
 	void DrawCanvas(CDC&);
 	game::Position HitTest(CPoint)const;
-	void UpdatePicture();
 	void UpdatePicture(CDC *pDC);
 
 private:

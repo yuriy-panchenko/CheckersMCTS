@@ -12,6 +12,7 @@
 
 // CCheckersApp:
 // See Checkers.cpp for the implementation of this class
+// 
 //
 
 class CCheckersApp : public CWinAppEx

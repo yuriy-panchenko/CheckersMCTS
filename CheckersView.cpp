@@ -239,11 +239,15 @@ void CCheckersView::DrawCanvas(CDC& dc)
 			if (auto p{ brd[pos] })
 			{
 				dc.SelectObject(p->color == Color::White ? m_brushWhite : m_brushBlack);
-				//auto oldPen{ dc.SelectStockObject(NULL_PEN) };
 				dc.Ellipse(r);
 				if (p->rank == Rank::Queen)
-				{
-				}
+					for (size_t i = 0; i < 3; i++)
+					{
+						r.DeflateRect(5, 5);
+						if (r.IsRectEmpty())
+							break;
+						else dc.Ellipse(r);
+					}
 				//dc.SelectObject(oldPen);
 			}
 		};

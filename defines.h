@@ -76,11 +76,15 @@ namespace game
 	};
 
 	using Move = std::vector<Jump>;
+	void operator+=(std::vector<Move>&, std::vector<Move>&&);
+	//std::vector<Move> operator+(std::vector<Move>&&, std::vector<Move>&&);
 
 	class Board
 	{
 		Piece* field[8][8];
 
+	public:
+		using location = std::pair<Piece*,Position>;
 	public:
 		Board();
 		Board(Board const&);
@@ -94,9 +98,9 @@ namespace game
 		Position FindKill(Jump const&)const;
 		Piece*& operator[](Position);
 		Piece const* operator[](Position)const;
-		std::vector<Move> test_piece(game::Position)const;
+		std::vector<Move> available_moves(game::Position)const;
 		bool MakeJump(Jump);
-		std::vector<Piece*> GetPieces(Color)const;
+		std::vector<location> GetPieces(Color)const;
 	};
 
 	//class Player {};

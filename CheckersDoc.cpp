@@ -8,6 +8,7 @@
 // and search filter handlers and allows sharing of document code with that project.
 #ifndef SHARED_HANDLERS
 #include "Checkers.h"
+#include "CheckersView.h"
 #endif
 
 #include "CheckersDoc.h"
@@ -103,7 +104,15 @@ void CCheckersDoc::MakeMove(game::Move const& m)
 
 void CCheckersDoc::EndGame()
 {
-	//	...................
+	auto pos{ GetFirstViewPosition() };
+	while (pos)
+		if (auto pView{ static_cast<CCheckersView*>(GetNextView(pos)) })
+			pView->UpdatePicture();
+
+	CString str;
+	str.Format(_T("Game over! %s is a winner."), m_Game.WhoMakesTurn() == Color::Black ? _T("WHITE") : _T("BLACK"));
+	AfxMessageBox(str);
+	OnNewDocument();
 }
 
 BOOL CCheckersDoc::OnNewDocument()
@@ -209,7 +218,13 @@ void CCheckersDoc::AutoMoveProc(HWND hWnd, UINT uMsg, UINT_PTR idEvent, DWORD dw
 			pDoc->m_idTimer = 0;
 
 		ASSERT(!pDoc->m_PossibleMoves.empty());
-		pDoc->MakeMove(pDoc->m_PossibleMoves[rand() % pDoc->m_PossibleMoves.size()]);
+		//pDoc->MakeMove(pDoc->m_PossibleMoves[rand() % pDoc->m_PossibleMoves.size()]);
+		ASSERT(!pDoc->m_PossibleMoves.empty());
+		pDoc->MakeMove(pDoc->m_PossibleMoves.front());
+		auto pos{ pDoc->GetFirstViewPosition() };
+		while (pos)
+			if (auto pView{ static_cast<CCheckersView*>(pDoc->GetNextView(pos)) })
+				pView->UpdatePicture();
 	}
 }
 
