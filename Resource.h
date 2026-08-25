@@ -5,6 +5,8 @@
 #define IDS_INDICATOR_WHITE             1
 #define IDS_INDICATOR_BLACK             2
 #define IDS_INDICATOR_POSSIBLE_MOVES    3
+#define IDS_INDICATOR_GAME_COUNT        4
+#define IDS_INDICATOR_MOVE_COUNT        5
 #define IDD_ABOUTBOX                    100
 #define IDP_OLE_INIT_FAILED             100
 #define IDR_POPUP_EDIT                  119

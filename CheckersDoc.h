@@ -47,6 +47,9 @@ protected:
 	afx_msg void OnUpdateIdsIndicatorWhite(CCmdUI* pCmdUI);
 	afx_msg void OnUpdateIdsIndicatorPossibleMoves(CCmdUI* pCmdUI);
 	afx_msg void OnUpdateIdsIndicatorBlack(CCmdUI* pCmdUI);
+	afx_msg void OnUpdateIdsIndicatorGameCount(CCmdUI* pCmdUI);
+	afx_msg void OnUpdateIdsIndicatorMoveCount(CCmdUI* pCmdUI);
+
 	DECLARE_MESSAGE_MAP()
 
 #ifdef SHARED_HANDLERS
@@ -60,6 +63,7 @@ private:
 
 	BOOL m_isWhiteHuman, m_isBlackHuman;
 	game::Checkers m_Game;
-	Moves m_PossibleMoves;
+	Moves m_PossibleMoves,m_History;
 	UINT_PTR m_idTimer;
+	SIZE_T m_uGameCount, m_uMoveCount;
 };

@@ -9,6 +9,7 @@
 #ifndef SHARED_HANDLERS
 #include "Checkers.h"
 #include "CheckersView.h"
+#include "MainFrm.h"
 #endif
 
 #include "CheckersDoc.h"
@@ -29,16 +30,38 @@ BEGIN_MESSAGE_MAP(CCheckersDoc, CDocument)
 	ON_UPDATE_COMMAND_UI(IDS_INDICATOR_WHITE, &CCheckersDoc::OnUpdateIdsIndicatorWhite)
 	ON_UPDATE_COMMAND_UI(IDS_INDICATOR_POSSIBLE_MOVES, &CCheckersDoc::OnUpdateIdsIndicatorPossibleMoves)
 	ON_UPDATE_COMMAND_UI(IDS_INDICATOR_BLACK, &CCheckersDoc::OnUpdateIdsIndicatorBlack)
+	ON_UPDATE_COMMAND_UI(IDS_INDICATOR_GAME_COUNT, &CCheckersDoc::OnUpdateIdsIndicatorGameCount)
+	ON_UPDATE_COMMAND_UI(IDS_INDICATOR_MOVE_COUNT, &CCheckersDoc::OnUpdateIdsIndicatorMoveCount)
 END_MESSAGE_MAP()
 
 
 // CCheckersDoc construction/destruction
 
 CCheckersDoc::CCheckersDoc() noexcept
-	:m_isWhiteHuman{ TRUE }
+	:m_isWhiteHuman{ FALSE }
 	, m_isBlackHuman{ FALSE }
 	, m_idTimer{ 0 }
-{}
+	, m_uGameCount{}
+	, m_uMoveCount{}
+{
+	/*long long diff{};
+	auto const start{ std::chrono::steady_clock::now() };
+
+	for (size_t i = 0; i < 1'000; i++)
+	{
+		game::Checkers ch;
+		auto mvs{ ch.GetAvailableMoves() };
+		while (!mvs.empty())
+			mvs = ch.Do(mvs[rand() % mvs.size()]);
+
+		auto const end{ std::chrono::steady_clock::now() };
+		diff += std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+	}
+
+	CString str;
+	str.Format(_T("Aver over 1000 is %.2f ms"), diff / 1'000.);
+	OutputDebugString(str);*/
+}
 
 game::Board const& CCheckersDoc::GetBoard() const
 {
@@ -72,7 +95,10 @@ game::Move CCheckersDoc::FindMove(game::Position from, game::Position to) const
 }
 
 CCheckersDoc::~CCheckersDoc()
-{}
+{
+	if (m_idTimer && ::KillTimer(NULL, m_idTimer))
+		m_idTimer = 0;
+}
 
 BOOL CCheckersDoc::IsHuman(game::Color col) const
 {
@@ -81,11 +107,18 @@ BOOL CCheckersDoc::IsHuman(game::Color col) const
 
 void CCheckersDoc::MakeMove(game::Move const& m)
 {
-	for (auto& j : m)
-		m_Game.MakeJump(j);
+	m_PossibleMoves = m_Game.Do(m);
 
-	auto cur{ m_Game.SwitchPlayer() };
-	m_PossibleMoves = m_Game.GetAvailableMoves();
+	if (!m.empty())
+	{
+		++m_uMoveCount;
+		m_History.push_back(m);
+		auto pMain{ static_cast<CMainFrame*>(theApp.GetMainWnd()) };
+		ASSERT(pMain);
+		CString str;
+		str.Format(_T("%I64u : %s"), m_uMoveCount, ToString(m));
+		pMain->GetOutputWnd().AddBuildString(str);
+	}
 
 	//	testing moves for ambiguity
 	for (auto it1{ m_PossibleMoves.begin() }; it1 != m_PossibleMoves.end(); ++it1)
@@ -98,7 +131,7 @@ void CCheckersDoc::MakeMove(game::Move const& m)
 
 	if (m_PossibleMoves.empty())
 		EndGame();
-	else if (!IsHuman(cur))
+	else if (!IsHuman(m_Game.WhoMakesTurn()))
 		m_idTimer = ::SetTimer(NULL, 0, 1'500, AutoMoveProc);
 }
 
@@ -120,12 +153,15 @@ BOOL CCheckersDoc::OnNewDocument()
 	if (!CDocument::OnNewDocument())
 		return FALSE;
 
-	m_Game = { Color::Black };
-	//m_PossibleMoves = m_Game.GetAvailableMoves();
-	MakeMove({});
+	if (m_idTimer && ::KillTimer(NULL, m_idTimer))
+		m_idTimer = 0;
+	static_cast<CMainFrame*>(theApp.GetMainWnd())->GetOutputWnd().ClearBuild();
 
-	//	if (!IsHuman(m_Game.WhoMakesTurn()))
-	//		m_idTimer = ::SetTimer(NULL, 0, 1'500, AutoMoveProc);
+	m_Game = { Color::Black };
+	++m_uGameCount;
+	m_uMoveCount = 0;
+	m_History.clear();
+	MakeMove({});
 
 	return TRUE;
 }
@@ -253,4 +289,18 @@ void CCheckersDoc::OnUpdateIdsIndicatorBlack(CCmdUI* pCmdUI)
 	str.Format(_T("Black %d"), m_Game.GetBoard().GetPieces(Color::Black).size());
 	pCmdUI->SetText(str);
 	pCmdUI->Enable(m_Game.WhoMakesTurn() == Color::Black);
+}
+
+void CCheckersDoc::OnUpdateIdsIndicatorGameCount(CCmdUI* pCmdUI)
+{
+	CString str;
+	str.Format(_T("G: %I64u"), m_uGameCount);
+	pCmdUI->SetText(str);
+}
+
+void CCheckersDoc::OnUpdateIdsIndicatorMoveCount(CCmdUI* pCmdUI)
+{
+	CString str;
+	str.Format(_T("M: %I64u"), m_uMoveCount);
+	pCmdUI->SetText(str);
 }

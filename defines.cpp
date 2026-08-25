@@ -61,7 +61,7 @@ namespace game
 		field[pos.row][pos.col] = nullptr;
 	}
 
-	Position Board::FindKill(Jump const& j) const
+	/*Position Board::FindKill(Jump const& j) const
 	{
 		Position const step_pos{
 			Row{j.To().row > j.From().row ? +1 : -1},
@@ -72,7 +72,7 @@ namespace game
 				return pos;
 
 		return {};
-	}
+	}*/
 
 	Piece*& Board::operator[](Position pos)
 	{
@@ -109,11 +109,20 @@ namespace game
 		else return kills;
 	}
 
-	bool Checkers::MakeJump(Jump const& j)
+	void Checkers::Do(Jump const& j)
 	{
 		ASSERT(brd[j.From()]);	//	have piece
 		ASSERT(!brd[j.To()]);	//	empty
-		return brd.MakeJump(j);
+		//return
+		brd.MakeJump(j);
+	}
+
+	std::vector<Move> Checkers::Do(Move const& m)
+	{
+		for (auto& j : m)
+			Do(j);
+		SwitchPlayer();
+		return GetAvailableMoves();
 	}
 
 	Color Checkers::SwitchPlayer()
@@ -242,20 +251,16 @@ namespace game
 		return kills.empty() ? moves : kills;
 	}
 
-	bool Board::MakeJump(Jump j)
+	void Board::MakeJump(Jump j)
 	{
-		auto pos{ FindKill(j) };
-		bool doKill{ pos != Position{} };
-		if (doKill)
-			Kill(pos);
+		if (j.IsKiller())
+			Kill(j.Kill());
 		(*this)[j.To()] = (*this)[j.From()];
 		(*this)[j.From()] = nullptr;
 
 		if ((*this)[j.To()]->rank == Rank::Pawn)
 			if (j.To().row == ((*this)[j.To()]->color == Color::White ? 0 : 7))
 				(*this)[j.To()]->rank = Rank::Queen;
-
-		return doKill;
 	}
 
 	std::vector<Board::location> Board::GetPieces(Color col) const
@@ -295,6 +300,12 @@ namespace game
 			return col % 2;
 		else
 			return !(col % 2);
+	}
+
+	Position::operator CString() const
+	{
+		wchar_t const ret[] = { col.to_wchar(), row.to_wchar(), L'\0', };
+		return ret;
 	}
 
 	Line& Line::operator++()
@@ -349,4 +360,26 @@ namespace game
 		v1 += std::move(v2);
 		return v1;
 	}*/
+
+	CString ToString(Move const& m)
+	{
+		if (m.empty())
+			return _T("");
+
+		CString ret{ m.front().From() };
+
+		for (auto& j : m)
+		{
+			ret += _T("->");
+			if (j.IsKiller())
+			{
+				ret.AppendChar(_T('{'));
+				ret += CString(j.Kill());
+				ret += _T("}->");
+			}
+			ret += CString(j.To());
+		}
+
+		return ret;
+	}
 }

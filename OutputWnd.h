@@ -30,14 +30,16 @@ public:
 	COutputWnd() noexcept;
 
 	void UpdateFonts();
+	void AddBuildString(CString const&);
+	void ClearBuild();
 
 // Attributes
 protected:
 	CMFCTabCtrl	m_wndTabs;
 
 	COutputList m_wndOutputBuild;
-	COutputList m_wndOutputDebug;
-	COutputList m_wndOutputFind;
+	//COutputList m_wndOutputDebug;
+	//COutputList m_wndOutputFind;
 
 protected:
 	void FillBuildWindow();

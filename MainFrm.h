@@ -17,6 +17,7 @@ public:
 
 // Operations
 public:
+	auto& GetOutputWnd() { return m_wndOutput; }
 
 // Overrides
 public:

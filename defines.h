@@ -37,6 +37,7 @@ namespace game
 		explicit Row(int i)
 			:Line{ i } {}
 
+		wchar_t to_wchar()const { return L'8' - index; }
 		bool top_half()const { return index < 4; }
 	};
 
@@ -49,7 +50,7 @@ namespace game
 		explicit Column(char);
 		explicit Column(int i)
 			:Line{ i } {}
-
+		wchar_t to_wchar()const { return L'A' + index; }
 	};
 
 	struct Position
@@ -62,6 +63,7 @@ namespace game
 		void operator+=(Position);
 		bool operator==(Position);
 		bool is_white()const;
+		operator CString()const;
 	};
 
 	class Jump
@@ -78,6 +80,7 @@ namespace game
 	using Move = std::vector<Jump>;
 	void operator+=(std::vector<Move>&, std::vector<Move>&&);
 	bool is_kills(std::vector<Move> const&);
+	CString ToString(Move const&);
 	//std::vector<Move> operator+(std::vector<Move>&&, std::vector<Move>&&);
 
 	class Board
@@ -85,7 +88,7 @@ namespace game
 		Piece* field[8][8];
 
 	public:
-		using location = std::pair<Piece*,Position>;
+		using location = std::pair<Piece*, Position>;
 	public:
 		Board();
 		Board(Board const&);
@@ -96,11 +99,11 @@ namespace game
 		Board& operator=(Board&&);
 
 		void Kill(Position);
-		Position FindKill(Jump const&)const;
+		//Position FindKill(Jump const&)const;
 		Piece*& operator[](Position);
 		Piece const* operator[](Position)const;
 		std::vector<Move> available_moves(game::Position)const;
-		bool MakeJump(Jump);
+		void MakeJump(Jump);
 		std::vector<location> GetPieces(Color)const;
 	};
 
@@ -115,7 +118,8 @@ namespace game
 		Checkers(Color first_move = Color::White);
 
 		std::vector<Move> GetAvailableMoves()const;
-		bool MakeJump(Jump const&);
+		void Do(Jump const&);
+		std::vector<Move> Do(Move const&);
 		Color SwitchPlayer();
 		Color WhoMakesTurn()const { return next_move; }
 		auto& GetBoard()const { return brd; }
