@@ -20,6 +20,8 @@
 #define new DEBUG_NEW
 #endif
 
+#define TIMER_ELLAPLE	(100)
+
 using namespace game;
 
 // CCheckersDoc
@@ -32,6 +34,12 @@ BEGIN_MESSAGE_MAP(CCheckersDoc, CDocument)
 	ON_UPDATE_COMMAND_UI(IDS_INDICATOR_BLACK, &CCheckersDoc::OnUpdateIdsIndicatorBlack)
 	ON_UPDATE_COMMAND_UI(IDS_INDICATOR_GAME_COUNT, &CCheckersDoc::OnUpdateIdsIndicatorGameCount)
 	ON_UPDATE_COMMAND_UI(IDS_INDICATOR_MOVE_COUNT, &CCheckersDoc::OnUpdateIdsIndicatorMoveCount)
+	ON_COMMAND(ID_START_PAUSE, &CCheckersDoc::OnStartPause)
+	ON_UPDATE_COMMAND_UI(ID_START_PAUSE, &CCheckersDoc::OnUpdateStartPause)
+	ON_COMMAND(ID_EDIT_UNDO, &CCheckersDoc::OnEditUndo)
+	ON_UPDATE_COMMAND_UI(ID_EDIT_UNDO, &CCheckersDoc::OnUpdateEditUndo)
+	ON_COMMAND(ID_EDIT_REDO, &CCheckersDoc::OnEditRedo)
+	ON_UPDATE_COMMAND_UI(ID_EDIT_REDO, &CCheckersDoc::OnUpdateEditRedo)
 END_MESSAGE_MAP()
 
 
@@ -43,6 +51,8 @@ CCheckersDoc::CCheckersDoc() noexcept
 	, m_idTimer{ 0 }
 	, m_uGameCount{}
 	, m_uMoveCount{}
+	, m_winWhite{}
+	, m_winBlack{}
 {
 	/*long long diff{};
 	auto const start{ std::chrono::steady_clock::now() };
@@ -59,7 +69,7 @@ CCheckersDoc::CCheckersDoc() noexcept
 	}
 
 	CString str;
-	str.Format(_T("Aver over 1000 is %.2f ms"), diff / 1'000.);
+	str.Format(_T("Total over 1000 is %.2f ms"), diff / 1'000'000.);
 	OutputDebugString(str);*/
 }
 
@@ -107,45 +117,119 @@ BOOL CCheckersDoc::IsHuman(game::Color col) const
 
 void CCheckersDoc::MakeMove(game::Move const& m)
 {
-	m_PossibleMoves = m_Game.Do(m);
-
 	if (!m.empty())
 	{
 		++m_uMoveCount;
-		m_History.push_back(m);
 		auto pMain{ static_cast<CMainFrame*>(theApp.GetMainWnd()) };
 		ASSERT(pMain);
 		CString str;
-		str.Format(_T("%I64u : %s"), m_uMoveCount, ToString(m));
+		str.Format(_T("%I64u : %s, %I64u poss"), m_uMoveCount, ToString(m), m_PossibleMoves.size());
 		pMain->GetOutputWnd().AddBuildString(str);
+		m_Undo.push_back({ m_Game.GetBoard().GetZipID(), m });
+	}
+
+	m_PossibleMoves = m_Game.Do(m);
+	if (!m_PossibleMoves.empty() && Test4Stale())
+	{
+		//EndGame(!m_Game.WhoMakesTurn());
+		EndGame();
+		return;
+	}
+
+	if (!m_PossibleMoves.empty())
+	{
+		(m_Game.WhoMakesTurn() == Color::White ? m_wPosibleTotal : m_bPosTotal) *= m_PossibleMoves.size();
+		(m_Game.WhoMakesTurn() == Color::White ? m_wNoCh : m_bNoCh) += m_PossibleMoves.size() - 1;
 	}
 
 	//	testing moves for ambiguity
-	for (auto it1{ m_PossibleMoves.begin() }; it1 != m_PossibleMoves.end(); ++it1)
+	/*for (auto it1{ m_PossibleMoves.begin() }; it1 != m_PossibleMoves.end(); ++it1)
 		for (auto it2{ std::next(it1) }; it2 != m_PossibleMoves.end(); ++it2)
 		{
 			bool const sameStart{ it1->front().From() == it2->front().From() };
 			bool const sameEnd{ it1->back().To() == it2->back().To() };
 			assert(!(sameStart && sameEnd));
-		}
+		}*/
 
 	if (m_PossibleMoves.empty())
-		EndGame();
+		EndGame(!m_Game.WhoMakesTurn());
 	else if (!IsHuman(m_Game.WhoMakesTurn()))
-		m_idTimer = ::SetTimer(NULL, 0, 1'500, AutoMoveProc);
+		m_idTimer = ::SetTimer(NULL, 0, TIMER_ELLAPLE, AutoMoveProc);
+}
+
+void CCheckersDoc::AutoMove()
+{
+	if (m_Redo.empty())
+	{
+		//MakeMove(m_PossibleMoves.front());
+		MakeMove(m_PossibleMoves[rand() % m_PossibleMoves.size()]);
+	}
+	else
+	{
+		//m = Convert(m_Redo.top());
+		//m_Redo.pop();
+	}
+
+	UpdatePicture();
+}
+
+void CCheckersDoc::EndGame(Color winner)
+{
+	UpdatePicture();
+
+	if (winner == Color::White)
+		++m_winWhite;
+	else ++m_winBlack;
+
+	CString str;
+	str.Format(_T("%I64u ..%s.. [%I64u:%I64u], mvs = %d, WhPos=%g, BlPos=%g, wNo:%I64u, bNo:%I64u"),
+		m_winWhite + m_winBlack,
+		(winner == Color::White ? _T("W") : _T("B")),
+		m_winWhite,
+		m_winBlack,
+		m_Undo.size(),
+		m_wPosibleTotal,
+		m_bPosTotal,
+		m_wNoCh,
+		m_bNoCh);
+	((CMainFrame*)theApp.GetMainWnd())->GetOutputWnd().AddDebugString(str);
+
+	if (IsHuman(Color::White) || IsHuman(Color::Black))
+	{
+		str.Format(_T("Game over! %s is a winner."), winner == Color::Black ? _T("WHITE") : _T("BLACK"));
+		AfxMessageBox(str);
+	}
+	OnNewDocument();
 }
 
 void CCheckersDoc::EndGame()
+{
+	UpdatePicture();
+
+	CString str;
+	str.Format(_T("%I64u ..%s.. [%I64u:%I64u], mvs = %d, WhPos=%g, BlPos=%g, wNo:%I64u, bNo:%I64u"),
+		m_winWhite + m_winBlack,
+		_T("X"),
+		m_winWhite,
+		m_winBlack,
+		m_Undo.size(),
+		m_wPosibleTotal,
+		m_bPosTotal,
+		m_wNoCh,
+		m_bNoCh);
+	((CMainFrame*)theApp.GetMainWnd())->GetOutputWnd().AddDebugString(str);
+
+	//if (IsHuman(Color::White) || IsHuman(Color::Black))
+		AfxMessageBox(_T("Game over! Noone is a winner."));
+	OnNewDocument();
+}
+
+void CCheckersDoc::UpdatePicture()
 {
 	auto pos{ GetFirstViewPosition() };
 	while (pos)
 		if (auto pView{ static_cast<CCheckersView*>(GetNextView(pos)) })
 			pView->UpdatePicture();
-
-	CString str;
-	str.Format(_T("Game over! %s is a winner."), m_Game.WhoMakesTurn() == Color::Black ? _T("WHITE") : _T("BLACK"));
-	AfxMessageBox(str);
-	OnNewDocument();
 }
 
 BOOL CCheckersDoc::OnNewDocument()
@@ -157,10 +241,28 @@ BOOL CCheckersDoc::OnNewDocument()
 		m_idTimer = 0;
 	static_cast<CMainFrame*>(theApp.GetMainWnd())->GetOutputWnd().ClearBuild();
 
-	m_Game = { Color::Black };
 	++m_uGameCount;
 	m_uMoveCount = 0;
-	m_History.clear();
+	m_Undo = {};
+	m_Redo = {};
+	m_wPosibleTotal = m_bPosTotal = 1.;
+	m_wNoCh = m_bNoCh = 0ULL;
+	m_idCount.clear();
+
+	m_Game = { Color::Black };
+	/*
+	m_Game.GetBoard().Clear();
+	m_Game.GetBoard().SetPieces({
+		{ {Color::Black,Rank::Queen},{Row{1},Column{0}}} ,
+		{ {Color::White,Rank::Queen},{Row{0},Column{5}}} });
+	auto id1 = m_Game.GetBoard().GetZipID();
+	m_Game.Do(Jump{ {Row{0},Column{1}}, {Row{1},Column{0}} });
+	auto id2 = m_Game.GetBoard().GetZipID();
+	ASSERT(id1 != id2);
+	m_Game.Do(Jump{ {Row{1},Column{0}}, {Row{0},Column{1}} });
+	auto id3 = m_Game.GetBoard().GetZipID();
+	ASSERT(id1 == id3);*/
+
 	MakeMove({});
 
 	return TRUE;
@@ -256,11 +358,7 @@ void CCheckersDoc::AutoMoveProc(HWND hWnd, UINT uMsg, UINT_PTR idEvent, DWORD dw
 		ASSERT(!pDoc->m_PossibleMoves.empty());
 		//pDoc->MakeMove(pDoc->m_PossibleMoves[rand() % pDoc->m_PossibleMoves.size()]);
 		ASSERT(!pDoc->m_PossibleMoves.empty());
-		pDoc->MakeMove(pDoc->m_PossibleMoves.front());
-		auto pos{ pDoc->GetFirstViewPosition() };
-		while (pos)
-			if (auto pView{ static_cast<CCheckersView*>(pDoc->GetNextView(pos)) })
-				pView->UpdatePicture();
+		pDoc->AutoMove();
 	}
 }
 
@@ -303,4 +401,63 @@ void CCheckersDoc::OnUpdateIdsIndicatorMoveCount(CCmdUI* pCmdUI)
 	CString str;
 	str.Format(_T("M: %I64u"), m_uMoveCount);
 	pCmdUI->SetText(str);
+}
+
+void CCheckersDoc::OnStartPause()
+{
+	if (m_idTimer)
+	{
+		if (::KillTimer(NULL, m_idTimer))
+			m_idTimer = 0;
+	}
+	else m_idTimer = ::SetTimer(NULL, 0, TIMER_ELLAPLE, AutoMoveProc);
+}
+
+void CCheckersDoc::OnUpdateStartPause(CCmdUI* pCmdUI)
+{
+	pCmdUI->SetCheck(m_idTimer != 0);
+	pCmdUI->Enable(!(IsHuman(Color::White) && IsHuman(Color::Black)));
+}
+
+void CCheckersDoc::OnEditUndo()
+{
+	auto m{ m_Undo.back() };
+	m_Redo.push(m);
+	m_Undo.pop_back();
+
+	m_Game.SwitchPlayer();
+	m_Game.SetZipID(m.state);
+	m_PossibleMoves = m_Game.GetAvailableMoves();
+
+	((CMainFrame*)theApp.GetMainWnd())->GetOutputWnd().RemoveBuildString();
+
+	UpdatePicture();
+}
+
+void CCheckersDoc::OnUpdateEditUndo(CCmdUI* pCmdUI)
+{
+	pCmdUI->Enable(!m_Undo.empty() && !m_idTimer);
+}
+
+void CCheckersDoc::OnEditRedo()
+{
+	auto m{ m_Redo.top() };
+	m_Redo.pop();
+	m_Undo.push_back(m);
+
+	m_Game.SwitchPlayer();
+	m_Game.SetZipID(m.state);
+
+	MakeMove(m.m);
+	UpdatePicture();
+}
+
+void CCheckersDoc::OnUpdateEditRedo(CCmdUI* pCmdUI)
+{
+	pCmdUI->Enable(!m_Redo.empty() && !m_idTimer);
+}
+
+BOOL CCheckersDoc::Test4Stale()
+{
+	return ++m_idCount[m_Game.GetBoard().GetZipID()] >= 3ull;
 }

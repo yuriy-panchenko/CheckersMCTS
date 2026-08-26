@@ -1,5 +1,6 @@
 #pragma once
 #include <vector>
+#include "zip_id.h"
 
 namespace game
 {
@@ -59,6 +60,8 @@ namespace game
 		Column col{ -1 };
 
 		operator bool()const { return row.valid() && col.valid(); }
+		operator size_t()const { return index(); }
+		int index()const { return (*this) ? row * 8 + col : -1; }
 		Position operator+(Position)const;
 		void operator+=(Position);
 		bool operator==(Position);
@@ -79,32 +82,33 @@ namespace game
 
 	using Move = std::vector<Jump>;
 	void operator+=(std::vector<Move>&, std::vector<Move>&&);
+	Color operator!(Color);
 	bool is_kills(std::vector<Move> const&);
 	CString ToString(Move const&);
 	//std::vector<Move> operator+(std::vector<Move>&&, std::vector<Move>&&);
 
 	class Board
 	{
-		Piece* field[8][8];
+		//Piece* field[8][8];
+		id::zip64 fld;
 
 	public:
-		using location = std::pair<Piece*, Position>;
+		using location = std::pair<Piece, Position>;
 	public:
-		Board();
-		Board(Board const&);
-		Board(Board&);
-		~Board();
-
-		Board& operator=(Board const&);
-		Board& operator=(Board&&);
-
-		void Kill(Position);
+		//void Kill(Position);
 		//Position FindKill(Jump const&)const;
-		Piece*& operator[](Position);
-		Piece const* operator[](Position)const;
+		bool operator[](Position)const;
+		Piece at(Position)const;
+		/*
+		Piece operator[](Position)const;*/
 		std::vector<Move> available_moves(game::Position)const;
 		void MakeJump(Jump);
 		std::vector<location> GetPieces(Color)const;
+		void init();
+		void SetPieces(std::vector<location> const&);
+		void Clear();
+		auto GetZipID()const { return fld; }
+		void SetZipID(id::zip64 z) { fld = z; }
 	};
 
 	//class Player {};
@@ -123,5 +127,7 @@ namespace game
 		Color SwitchPlayer();
 		Color WhoMakesTurn()const { return next_move; }
 		auto& GetBoard()const { return brd; }
+		auto& GetBoard() { return brd; }
+		void SetZipID(id::zip64);
 	};
 }

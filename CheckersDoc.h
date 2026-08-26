@@ -5,10 +5,13 @@
 
 #pragma once
 #include "defines.h"
+#include <stack>
+#include <map>
 
 class CCheckersDoc : public CDocument
 {
 	using Moves = std::vector<game::Move>;
+	struct Hist { id::zip64 state; game::Move m; };
 protected: // create from serialization only
 	CCheckersDoc() noexcept;
 	DECLARE_DYNCREATE(CCheckersDoc)
@@ -20,6 +23,7 @@ public:
 	BOOL IsPossible2Move2(game::Position root, game::Position testPos)const;
 	game::Move FindMove(game::Position from, game::Position to)const;
 	void MakeMove(game::Move const&);
+	void AutoMove();
 	// Operations
 public:
 
@@ -49,7 +53,12 @@ protected:
 	afx_msg void OnUpdateIdsIndicatorBlack(CCmdUI* pCmdUI);
 	afx_msg void OnUpdateIdsIndicatorGameCount(CCmdUI* pCmdUI);
 	afx_msg void OnUpdateIdsIndicatorMoveCount(CCmdUI* pCmdUI);
-
+	afx_msg void OnStartPause();
+	afx_msg void OnUpdateStartPause(CCmdUI* pCmdUI);
+	afx_msg void OnEditUndo();
+	afx_msg void OnUpdateEditUndo(CCmdUI* pCmdUI);
+	afx_msg void OnEditRedo();
+	afx_msg void OnUpdateEditRedo(CCmdUI* pCmdUI);
 	DECLARE_MESSAGE_MAP()
 
 #ifdef SHARED_HANDLERS
@@ -59,11 +68,18 @@ protected:
 
 private:
 	BOOL IsHuman(game::Color)const;
+	void EndGame(game::Color);
 	void EndGame();
+	void UpdatePicture();
+	BOOL Test4Stale();
 
 	BOOL m_isWhiteHuman, m_isBlackHuman;
 	game::Checkers m_Game;
-	Moves m_PossibleMoves,m_History;
+	Moves m_PossibleMoves;
+	std::vector<Hist> m_Undo;
+	std::stack<Hist> m_Redo;
+	std::map<id::zip64, size_t> m_idCount;
 	UINT_PTR m_idTimer;
-	SIZE_T m_uGameCount, m_uMoveCount;
+	SIZE_T m_uGameCount, m_uMoveCount,m_winWhite,m_winBlack,m_wNoCh,m_bNoCh;
+	double m_wPosibleTotal, m_bPosTotal;
 };

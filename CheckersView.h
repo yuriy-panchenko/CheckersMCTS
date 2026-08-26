@@ -53,7 +53,7 @@ private:
 private:
 	CBitmap m_bmpCanvas;
 	CRect m_rCanvas, m_rBoard;
-	CBrush m_brushWhite, m_brushBlack;
+	CBrush m_brushWhite, m_brushBlack, m_brushQueenCenter;
 	CPen m_penSelect,m_penPossible;
 	game::Position m_Selected;
 };

@@ -3,110 +3,40 @@
 
 namespace game
 {
-	Board::Board()
+	//void Board::Kill(Position pos)
+	//{
+	//	ASSERT(fld.has(pos.index()));
+	//	fld.kill(pos.index());
+	//	//delete field[pos.row][pos.col];
+	//	//field[pos.row][pos.col] = nullptr;
+	//}
+
+	/*Piece Board::operator[](Position pos)
 	{
-		ZeroMemory(&field, sizeof field);
-		auto fill_row = [this](Position pos)
-			{
-				field[pos.row][pos.col] = new Piece{ pos.row < 4 ? Color::Black : Color::White, Rank::Pawn };
-				pos.col += 2;
-				field[pos.row][pos.col] = new Piece{ pos.row < 4 ? Color::Black : Color::White, Rank::Pawn };
-				pos.col += 2;
-				field[pos.row][pos.col] = new Piece{ pos.row < 4 ? Color::Black : Color::White, Rank::Pawn };
-				pos.col += 2;
-				field[pos.row][pos.col] = new Piece{ pos.row < 4 ? Color::Black : Color::White, Rank::Pawn };
-			};
-
-		fill_row({ Row{0}, Column{1} });
-		fill_row({ Row{1}, Column{0} });
-		fill_row({ Row{2}, Column{1} });
-
-		fill_row({ Row{5}, Column{0} });
-		fill_row({ Row{6}, Column{1} });
-		fill_row({ Row{7}, Column{0} });
+		ASSERT(pos);
+		return field[pos.row][pos.col];
 	}
 
-	Board::Board(Board const& oth)
+	Piece Board::operator[](Position pos) const
 	{
-		for (size_t r = 0; r < 8; ++r)
-			for (size_t c = 0; c < 8; ++c)
-				if (oth.field[r][c])
-					field[r][c] = new Piece{ *oth.field[r][c] };
-				else field[r][c] = nullptr;
-	}
-
-	Board::~Board()
-	{
-		for (size_t r = 0; r < 8; r++)
-			for (size_t c = 0; c < 8; c++)
-				delete field[r][c];
-	}
-
-	Board& Board::operator=(Board&& oth)
-	{
-		for (size_t r = 0; r < 8; r++)
-			for (size_t c = 0; c < 8; c++)
-			{
-				delete field[r][c];
-				field[r][c] = oth.field[r][c];
-				oth.field[r][c] = nullptr;
-			}
-		return *this;
-	}
-
-	void Board::Kill(Position pos)
-	{
-		ASSERT(field[pos.row][pos.col]);
-		delete field[pos.row][pos.col];
-		field[pos.row][pos.col] = nullptr;
-	}
-
-	/*Position Board::FindKill(Jump const& j) const
-	{
-		Position const step_pos{
-			Row{j.To().row > j.From().row ? +1 : -1},
-			Column{j.To().col > j.From().col ? +1 : -1} };
-
-		for (auto pos{ j.From() + step_pos }; pos != j.To(); pos += step_pos)
-			if ((*this)[pos])
-				return pos;
-
-		return {};
+		ASSERT(pos);
+		return field[pos.row][pos.col];
 	}*/
-
-	Piece*& Board::operator[](Position pos)
-	{
-		ASSERT(pos);
-		return field[pos.row][pos.col];
-	}
-
-	Piece const* Board::operator[](Position pos) const
-	{
-		ASSERT(pos);
-		return field[pos.row][pos.col];
-	}
 
 	Checkers::Checkers(Color first_move)
 		:next_move{ first_move }
-	{}
+	{
+		brd.init();
+	}
 
 	std::vector<Move> Checkers::GetAvailableMoves()const
 	{
-		std::vector<Move> kills, mvs;
+		std::vector<Move> ret;
 
 		for (auto const& [p, pos] : brd.GetPieces(next_move))
-		{
-			auto ms{ brd.available_moves(pos) };
-			if (!ms.empty())
-				if (ms.front().front().IsKiller())
-					kills.insert(kills.end(), std::make_move_iterator(ms.begin()), std::make_move_iterator(ms.end()));
-				else
-					mvs.insert(mvs.end(), std::make_move_iterator(ms.begin()), std::make_move_iterator(ms.end()));
-		}
+			ret += brd.available_moves(pos);
 
-		if (kills.empty())
-			return mvs;
-		else return kills;
+		return ret;
 	}
 
 	void Checkers::Do(Jump const& j)
@@ -130,30 +60,46 @@ namespace game
 		return next_move = next_move == Color::White ? Color::Black : Color::White;;
 	}
 
+	void Checkers::SetZipID(id::zip64 z)
+	{
+		brd.SetZipID(z);
+	}
+
+	bool Board::operator[](Position pos) const
+	{
+		return fld.has(pos);
+	}
+
+	Piece Board::at(Position pos) const
+	{
+		return Piece{ fld.is_white(pos) ? Color::White : Color::Black, fld.is_queen(pos) ? Rank::Queen : Rank::Pawn };
+	}
+
 	std::vector<Move> Board::available_moves(game::Position const pos)const
 	{
-		auto p{ (*this)[pos] };
-		ASSERT(p);
+		ASSERT((*this)[pos]);
+		auto p{ at(pos) };
 		std::vector<Move> kills, moves;
 
 		auto test_kill = [this](Jump const& j)->std::vector<Move>
 			{
 				std::vector<Move> ret;
-				if (j.To() && !(*this)[j.To()] && (*this)[j.Kill()] && (*this)[j.Kill()]->color != (*this)[j.From()]->color)
-				{
-					auto brd{ *this };
-					brd.MakeJump(j);
-					auto mvs{ brd.available_moves(j.To()) };
-					if (mvs.empty())
-						ret.push_back({ j });
-					else if (mvs.front().front().IsKiller())
-						for (auto& mv : mvs)
-						{
-							mv.insert(mv.begin(), j);
-							ret.push_back(std::move(mv));
-						}
-					else ret.push_back({ j });
-				}
+				if (j.To() && !(*this)[j.To()] && (*this)[j.Kill()])
+					if (at(j.Kill()).color != at(j.From()).color)
+					{
+						auto brd{ *this };
+						brd.MakeJump(j);
+						auto mvs{ brd.available_moves(j.To()) };
+						if (mvs.empty())
+							ret.push_back({ j });
+						else if (mvs.front().front().IsKiller())
+							for (auto& mv : mvs)
+							{
+								mv.insert(mv.begin(), j);
+								ret.push_back(std::move(mv));
+							}
+						else ret.push_back({ j });
+					}
 				return ret;
 			};
 
@@ -172,7 +118,7 @@ namespace game
 				return Jump{ pos, pos + Position{Row{2 * y}, Column{2 * x}}, pos + Position{Row{y}, Column{x}} };
 			};
 
-		if (p->rank == Rank::Pawn)
+		if (p.rank == Rank::Pawn)
 		{
 			auto murder{ test_kill(make_pawn_kill_jump(true,true)) };
 			auto src{ test_kill(make_pawn_kill_jump(true, false)) };
@@ -186,9 +132,9 @@ namespace game
 
 			if (murder.empty())
 			{
-				auto src{ test_move({ pos, pos + Position{ Row{p->color == Color::White ? -1 : 1}, Column{-1} } }) };
+				auto src{ test_move({ pos, pos + Position{ Row{p.color == Color::White ? -1 : 1}, Column{-1} } }) };
 				moves.insert(moves.end(), std::make_move_iterator(src.begin()), std::make_move_iterator(src.end()));
-				src = test_move({ pos, pos + Position{ Row{p->color == Color::White ? -1 : 1}, Column{+1} } });
+				src = test_move({ pos, pos + Position{ Row{p.color == Color::White ? -1 : 1}, Column{+1} } });
 				moves.insert(moves.end(), std::make_move_iterator(src.begin()), std::make_move_iterator(src.end()));
 			}
 			else
@@ -205,7 +151,7 @@ namespace game
 
 					for (; pos2; pos2 += dir)
 						if ((*this)[pos2])
-							if ((*this)[pos2]->color == (*this)[pos]->color)
+							if (fld.is_white(pos2) == fld.is_white(pos))
 								return mvs;
 							else break;
 						else mvs.push_back({ {pos, pos2} });
@@ -253,27 +199,60 @@ namespace game
 
 	void Board::MakeJump(Jump j)
 	{
-		if (j.IsKiller())
-			Kill(j.Kill());
-		(*this)[j.To()] = (*this)[j.From()];
-		(*this)[j.From()] = nullptr;
+		fld.move(j.To(), j.From());
 
-		if ((*this)[j.To()]->rank == Rank::Pawn)
-			if (j.To().row == ((*this)[j.To()]->color == Color::White ? 0 : 7))
-				(*this)[j.To()]->rank = Rank::Queen;
+		if (j.IsKiller())
+			fld.kill(j.Kill());
+
+		if (!fld.is_queen(j.To()))
+			if (j.To().row == (fld.is_white(j.To()) ? 0 : 7))
+				fld.set_rank(j.To(), true);
 	}
 
 	std::vector<Board::location> Board::GetPieces(Color col) const
 	{
 		std::vector<location> ret;
 		ret.reserve(12);
+		bool const myWhite{ col == Color::White };
 
-		for (int y = 0; y < 8; ++y)
-			for (int x = 0; x < 8; ++x)
-				if (field[y][x] && field[y][x]->color == col)
-					ret.push_back({ field[y][x], Position{ Row{y}, Column{x} } });
+		for (size_t i = 0; i < 64; ++i)
+			if (fld.has(i) && fld.is_white(i) == myWhite)
+				ret.push_back({ Piece{col,fld.is_queen(i) ? Rank::Queen : Rank::Pawn}, Position{ Row{int(i) / 8}, Column{int(i) % 8} } });
 
 		return ret;
+	}
+
+	void Board::init()
+	{
+		fld = {};
+		auto fill_row = [this](Position pos)
+			{
+				fld.set(pos.index(), pos.row > 4, false);
+				pos.col += 2;
+				fld.set(pos.index(), pos.row > 4, false);
+				pos.col += 2;
+				fld.set(pos.index(), pos.row > 4, false);
+				pos.col += 2; fld.set(pos.index(), pos.row > 4, false);
+			};
+
+		fill_row({ Row{0}, Column{1} });
+		fill_row({ Row{1}, Column{0} });
+		fill_row({ Row{2}, Column{1} });
+
+		fill_row({ Row{5}, Column{0} });
+		fill_row({ Row{6}, Column{1} });
+		fill_row({ Row{7}, Column{0} });
+	}
+
+	void Board::SetPieces(std::vector<location> const& v)
+	{
+		for (auto& [p, pos] : v)
+			fld.set(pos, p.color == Color::White, p.rank == Rank::Queen);
+	}
+
+	void Board::Clear()
+	{
+		fld.clear();
 	}
 
 	Position Position::operator+(Position pos) const
@@ -333,19 +312,18 @@ namespace game
 
 	void operator+=(std::vector<Move>& dst, std::vector<Move>&& src)
 	{
-		if (src.empty())
-			return;
+		if (!src.empty())
+			if (dst.empty())
+				dst = std::move(src);
+			else if (is_kills(dst) == is_kills(src))
+				dst.insert(dst.end(), src.begin(), src.end());
+			else if (is_kills(src))
+				dst = src;
+	}
 
-		if (dst.empty())
-		{
-			dst = std::move(src);
-			return;
-		}
-
-		if (is_kills(dst) == is_kills(src))
-			dst.insert(dst.end(), std::make_move_iterator(src.begin()), std::make_move_iterator(src.begin()));
-		else if (is_kills(src))
-			dst = src;
+	Color operator!(Color col)
+	{
+		return col == Color::White ? Color::Black : Color::White;
 	}
 
 	bool is_kills(std::vector<Move> const& v)
@@ -370,12 +348,12 @@ namespace game
 
 		for (auto& j : m)
 		{
-			ret += _T("->");
+			ret += _T(" -> ");
 			if (j.IsKiller())
 			{
-				ret.AppendChar(_T('{'));
+				ret.AppendChar(_T('['));
 				ret += CString(j.Kill());
-				ret += _T("}->");
+				ret += _T("] -> ");
 			}
 			ret += CString(j.To());
 		}

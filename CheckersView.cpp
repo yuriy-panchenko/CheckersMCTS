@@ -38,6 +38,7 @@ END_MESSAGE_MAP()
 CCheckersView::CCheckersView() noexcept
 	:m_brushWhite{ RGB(180,20,20) }
 	, m_brushBlack{ RGB(20,180,20) }
+	, m_brushQueenCenter{ RGB(20,20,180) }
 	, m_penSelect{ PS_SOLID,3,RGB(220,220,20) }
 	, m_penPossible{ PS_SOLID,3,RGB(20,220,20) }
 {
@@ -236,19 +237,45 @@ void CCheckersView::DrawCanvas(CDC& dc)
 				dc.SelectObject(oldPen);
 			}
 
-			if (auto p{ brd[pos] })
+			if (brd[pos])
 			{
-				dc.SelectObject(p->color == Color::White ? m_brushWhite : m_brushBlack);
+				auto p{ brd.at(pos) };
+				dc.SelectObject(p.color == Color::White ? m_brushWhite : m_brushBlack);
 				dc.Ellipse(r);
-				if (p->rank == Rank::Queen)
-					for (size_t i = 0; i < 3; i++)
+				if (p.rank == Rank::Queen)
+				{
+					auto fill_queen_center = [this, &dc](CRect const& r)
+						{
+							ASSERT(!r.IsRectEmpty());
+							auto oldBrush{ dc.SelectObject(m_brushQueenCenter) };
+							dc.Ellipse(r);
+							dc.SelectObject(oldBrush);
+						};
+
+					auto const cellR{ r };
+					auto oldR{ r };
+					int circle_count{};
+
+					do
 					{
 						r.DeflateRect(5, 5);
-						if (r.IsRectEmpty())
+						++circle_count;
+						if (circle_count > 1
+							&& 3 * r.Width() < cellR.Width())	//	next circle is too small
+						{
+							fill_queen_center(oldR);
 							break;
-						else dc.Ellipse(r);
-					}
-				//dc.SelectObject(oldPen);
+						}
+						if (circle_count == 3)
+						{
+							fill_queen_center(r);
+							break;
+						}
+						else
+							dc.Ellipse(r);
+						oldR = r;
+					} while (true);
+				}
 			}
 		};
 
@@ -313,6 +340,8 @@ void CCheckersView::OnLButtonDown(UINT nFlags, CPoint point)
 			else
 			{
 				GetDocument()->MakeMove(m);
+				//GetDocument()->Add2History(m, TRUE);
+				//GetDocument()->
 				m_Selected = {};
 			}
 		}
