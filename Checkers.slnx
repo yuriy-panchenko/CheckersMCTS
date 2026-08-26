@@ -3,5 +3,8 @@
     <Platform Name="x64" />
     <Platform Name="x86" />
   </Configurations>
-  <Project Path="Checkers.vcxproj" />
+  <Project Path="Checkers.vcxproj">
+    <BuildDependency Project="D:/Simon projects/NeuralNetworks/NeuralNetworks.vcxproj" />
+  </Project>
+  <Project Path="D:/Simon projects/NeuralNetworks/NeuralNetworks.vcxproj" Id="39d1d260-9398-45bc-a6a3-ce69fe419381" />
 </Solution>

@@ -82,4 +82,5 @@ private:
 	UINT_PTR m_idTimer;
 	SIZE_T m_uGameCount, m_uMoveCount,m_winWhite,m_winBlack,m_wNoCh,m_bNoCh;
 	double m_wPosibleTotal, m_bPosTotal;
+	NNet m_Net;
 };

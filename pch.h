@@ -11,5 +11,8 @@
 #include "framework.h"
 #include <cassert>
 #include <chrono>
+#include "D:\Simon projects\NeuralNetworks\nnet.h"
+
+using NNet = nnet::net;
 
 #endif //PCH_H
