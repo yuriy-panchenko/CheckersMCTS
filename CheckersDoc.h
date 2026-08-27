@@ -73,6 +73,13 @@ private:
 	void UpdatePicture();
 	BOOL Test4Stale();
 
+	static std::vector<double> mask_and_softmax(std::vector<double> const& raw_logits, std::vector<int> const& legal_indices);
+	static bool is_dark_square(size_t index);
+	
+	std::vector<double> encode_board()const;
+	std::vector<double> encode_board(game::Checkers const& game);
+	std::vector<int>    encode_legal_moves(game::Checkers const& game, std::optional<game::Position> const& forced);
+
 	BOOL m_isWhiteHuman, m_isBlackHuman;
 	game::Checkers m_Game;
 	Moves m_PossibleMoves;

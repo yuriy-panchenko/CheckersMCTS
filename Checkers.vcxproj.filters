@@ -51,6 +51,9 @@
     <ClInclude Include="zip_id.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="mcts.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Checkers.cpp">
@@ -111,5 +114,8 @@
     <Image Include="res\Toolbar256.bmp">
       <Filter>Resource Files</Filter>
     </Image>
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="Architecture.txt" />
   </ItemGroup>
 </Project>

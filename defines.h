@@ -122,6 +122,7 @@ namespace game
 		Checkers(Color first_move = Color::White);
 
 		std::vector<Move> GetAvailableMoves()const;
+		std::vector<Move> GetAvailableMoves(Position)const;
 		void Do(Jump const&);
 		std::vector<Move> Do(Move const&);
 		Color SwitchPlayer();

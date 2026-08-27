@@ -39,6 +39,11 @@ namespace game
 		return ret;
 	}
 
+	std::vector<Move> Checkers::GetAvailableMoves(Position pos) const
+	{
+		return brd.available_moves(pos);
+	}
+
 	void Checkers::Do(Jump const& j)
 	{
 		ASSERT(brd[j.From()]);	//	have piece

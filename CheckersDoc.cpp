@@ -42,7 +42,6 @@ BEGIN_MESSAGE_MAP(CCheckersDoc, CDocument)
 	ON_UPDATE_COMMAND_UI(ID_EDIT_REDO, &CCheckersDoc::OnUpdateEditRedo)
 END_MESSAGE_MAP()
 
-
 // CCheckersDoc construction/destruction
 
 CCheckersDoc::CCheckersDoc() noexcept
@@ -71,6 +70,12 @@ CCheckersDoc::CCheckersDoc() noexcept
 	CString str;
 	str.Format(_T("Total over 1000 is %.2f ms"), diff / 1'000'000.);
 	OutputDebugString(str);*/
+	m_Net.init();
+
+	m_Net.think(encode_board());                                    // 1. forward pass
+	auto legal = encode_legal_moves(board, rules_engine_output);  // 2. your move-encoding step maps legal Jumps → indices
+	auto priors = mask_and_softmax(m_Net.policy_logits(), legal);    // 3. masking + softmax happens here
+	double v = m_Net.value();                                       // 4. value head, no masking needed (scalar)
 }
 
 game::Board const& CCheckersDoc::GetBoard() const
@@ -220,7 +225,7 @@ void CCheckersDoc::EndGame()
 	((CMainFrame*)theApp.GetMainWnd())->GetOutputWnd().AddDebugString(str);
 
 	//if (IsHuman(Color::White) || IsHuman(Color::Black))
-		AfxMessageBox(_T("Game over! Noone is a winner."));
+	AfxMessageBox(_T("Game over! Noone is a winner."));
 	OnNewDocument();
 }
 
@@ -460,4 +465,72 @@ void CCheckersDoc::OnUpdateEditRedo(CCmdUI* pCmdUI)
 BOOL CCheckersDoc::Test4Stale()
 {
 	return ++m_idCount[m_Game.GetBoard().GetZipID()] >= 3ull;
+}
+
+std::vector<double> CCheckersDoc::mask_and_softmax(std::vector<double> const& raw_logits, std::vector<int> const& legal_indices)
+{
+	std::vector<double> probs(raw_logits.size(), .0);
+
+	// subtract max (over legal moves only) before exponentiating —
+	// avoids overflow if a logit is large, standard softmax stability trick
+	double max_logit = -std::numeric_limits<double>::infinity();
+	for (int idx : legal_indices)
+		max_logit = (std::max)(max_logit, raw_logits[idx]);
+
+	double sum{ .0 };
+	for (int idx : legal_indices)
+	{
+		double const e{ std::exp(raw_logits[idx] - max_logit) };
+		probs[idx] = e;
+		sum += e;
+	}
+
+	for (int idx : legal_indices)
+		probs[idx] /= sum;
+
+	return probs;   // size 896, zero everywhere except legal_indices, sums to 1
+}
+
+std::vector<double> CCheckersDoc::encode_board() const
+{
+	auto brd{ m_Game.GetBoard().GetZipID() };
+	auto const mycol{ m_Game.WhoMakesTurn() };
+	bool const im_white{ mycol == Color::White };
+
+	std::vector<double> ret(128, .0);
+	auto iter{ ret.begin() };
+
+	auto write_square = [&](size_t i)
+		{
+			if (brd.has(i))
+				if (brd.is_white(i) == im_white)   // my own
+					*(iter + (brd.is_queen(i) ? 1 : 0)) = 1.;
+				else
+					*(iter + (brd.is_queen(i) ? 3 : 2)) = 1.;
+			iter += 4;
+		};
+
+	if (im_white)
+	{
+		for (size_t i = 0; i < 64; ++i)
+			if (is_dark_square(i))
+				write_square(i);
+	}
+	else
+		for (size_t i = 64; i-- > 0; )
+			if (is_dark_square(i))
+				write_square(i);
+
+	return ret;
+}
+
+std::vector<int> CCheckersDoc::encode_legal_moves(game::Checkers const& game, std::optional<game::Position> const& forced)
+{
+	 auto moves = forced ? game.GetAvailableMoves(*forced) : game.GetAvailableMoves();
+    bool const im_white = (game.WhoMakesTurn() == Color::White);
+}
+
+bool CCheckersDoc::is_dark_square(size_t index)
+{
+	return ((index / 8) + (index % 8)) % 2 == 1;   // true = dark/playable square
 }

@@ -11,8 +11,11 @@
 #include "framework.h"
 #include <cassert>
 #include <chrono>
-#include "D:\Simon projects\NeuralNetworks\nnet.h"
+//#include "D:\Simon projects\NeuralNetworks\nnet.h"
+//#include "D:\Simon projects\NeuralNetworks\NNetProxy.h"
+#include "D:\Simon projects\NeuralNetworks\CheckersNet.h"
 
-using NNet = nnet::net;
+//using NNet = nnet::net;
+using NNet = chk::net;
 
 #endif //PCH_H

@@ -1,0 +1,17 @@
+
+Input: 128 (32 squares × 4 planes: own man / own king / opp man / opp king)
+   ↓
+Dense(256) + ReLU
+Dense(256) + ReLU
+Dense(128) + ReLU        ← shared trunk
+   ↓                ↓
+Policy branch        Value branch
+Dense(896)           Dense(64) + ReLU
+[mask + softmax]     Dense(1) + tanh
+
+
+
++0	own man present (1/0)
++1	own king present (1/0)
++2	opponent man present (1/0)
++3	opponent king present (1/0)
