@@ -1,5 +1,4 @@
 #pragma once
-#include <optional>
 #include <memory>
 #include "defines.h"
 
@@ -7,11 +6,11 @@ namespace mcts
 {
 	struct Node;
 
-	struct SearchState
-	{
-		game::Checkers game;                    // full snapshot — cheap to copy, it's just bitboards
-		std::optional<game::Position> forced;   // set if mid-chain; determines GetAvailableMoves() vs GetAvailableMoves(pos)
-	};
+	//struct SearchState
+	//{
+	//	game::Checkers game;                    // full snapshot — cheap to copy, it's just bitboards
+	//	game::Position forced;   // set if mid-chain; determines GetAvailableMoves() vs GetAvailableMoves(pos)
+	//};
 
 	struct Edge
 	{
@@ -26,7 +25,7 @@ namespace mcts
 	
 	struct Node
 	{
-		SearchState state;
+		game::Checkers state;
 		bool expanded = false;
 		bool terminal = false;
 		double terminal_value = 0.0;   // only meaningful if terminal
@@ -37,7 +36,7 @@ namespace mcts
 	{
 		std::unique_ptr<Node> root;
 	public:
-		explicit MCTS(SearchState const& initial_state);
+		explicit MCTS(game::Checkers const& initial_state);
 		void run_simulation();     // one selection→expansion→backup pass — next step
 		game::Move select_move() const;  // pick real move from root edge visit counts — later step
 	};

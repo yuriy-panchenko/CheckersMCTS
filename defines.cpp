@@ -1,5 +1,7 @@
 #include "pch.h"
 #include "defines.h"
+//#include <algorithm>
+#include <numeric> // for std::accumulate
 
 namespace game
 {
@@ -39,23 +41,24 @@ namespace game
 		return ret;
 	}
 
-	std::vector<Move> Checkers::GetAvailableMoves(Position pos) const
+	std::vector<Move> Checkers::GetContinuation(Position pos) const
 	{
-		return brd.available_moves(pos);
+		auto ret{ brd.available_moves(pos) };
+		return is_kills(ret) ? ret : std::vector<Move>{};
 	}
 
-	void Checkers::Do(Jump const& j)
-	{
-		ASSERT(brd[j.From()]);	//	have piece
-		ASSERT(!brd[j.To()]);	//	empty
-		//return
-		brd.MakeJump(j);
-	}
+	//void Checkers::Do(Jump const& j)
+	//{
+	//	ASSERT(brd[j.From()]);	//	have piece
+	//	ASSERT(!brd[j.To()]);	//	empty
+	//	//return
+	//	brd.MakeJump(j);
+	//}
 
 	std::vector<Move> Checkers::Do(Move const& m)
 	{
 		for (auto& j : m)
-			Do(j);
+			brd.Make(j);
 		SwitchPlayer();
 		return GetAvailableMoves();
 	}
@@ -68,6 +71,11 @@ namespace game
 	void Checkers::SetZipID(id::zip64 z)
 	{
 		brd.SetZipID(z);
+	}
+
+	bool Checkers::IsWhiteTurn() const
+	{
+		return next_move == Color::White;
 	}
 
 	bool Board::operator[](Position pos) const
@@ -93,7 +101,7 @@ namespace game
 					if (at(j.Kill()).color != at(j.From()).color)
 					{
 						auto brd{ *this };
-						brd.MakeJump(j);
+						brd.Make(j);
 						auto mvs{ brd.available_moves(j.To()) };
 						if (mvs.empty())
 							ret.push_back({ j });
@@ -173,7 +181,7 @@ namespace game
 							{
 								Jump const j{ pos, pos2, kill_pos };
 								auto brd{ *this };
-								brd.MakeJump(j);
+								brd.Make(j);
 								auto possible{ brd.available_moves(pos2) };
 
 								if (possible.empty() || !is_kills(possible))
@@ -202,7 +210,7 @@ namespace game
 		return kills.empty() ? moves : kills;
 	}
 
-	void Board::MakeJump(Jump j)
+	void Board::Make(Jump j)
 	{
 		fld.move(j.To(), j.From());
 
@@ -260,6 +268,35 @@ namespace game
 		fld.clear();
 	}
 
+	std::vector<double> Board::encode_board(bool isWhite)const
+	{
+		std::vector<double> ret(128, .0);
+		auto iter{ ret.begin() };
+
+		auto write_square = [&](size_t i)
+			{
+				if (fld.has(i))
+					if (fld.is_white(i) == isWhite)   // my own
+						*(iter + (fld.is_queen(i) ? 1 : 0)) = 1.;
+					else
+						*(iter + (fld.is_queen(i) ? 3 : 2)) = 1.;
+				iter += 4;
+			};
+
+		if (isWhite)
+		{
+			for (size_t i = 0; i < 64; ++i)
+				if (fld.is_dark_square(i))
+					write_square(i);
+		}
+		else
+			for (size_t i = 64; i-- > 0; )
+				if (fld.is_dark_square(i))
+					write_square(i);
+
+		return ret;
+	}
+
 	Position Position::operator+(Position pos) const
 	{
 		auto ret{ *this };
@@ -315,6 +352,32 @@ namespace game
 		, kill{ k }
 	{}
 
+	Wind Jump::Direction() const
+	{
+		if (from.col < to.col)	//	going East
+			return from.row < to.row ? Wind::NE : Wind::SE;
+		else
+			return from.row < to.row ? Wind::NW : Wind::SW;
+	}
+
+	size_t Jump::Distance() const
+	{
+		return (size_t)std::abs(from.row - to.row);
+	}
+
+	size_t Jump::to_policy_index(bool isWhite) const
+	{
+		auto square_id{ from / 2ull };
+		auto dir{ (size_t)Direction() };
+		if (!isWhite)
+		{
+			square_id = 31 - square_id;
+			dir = 3 - dir;
+		}
+
+		return square_id * 28ull + dir * 7ull + (Distance() - 1ull);   // 28 = 4 dirs * 7 distances
+	}
+
 	void operator+=(std::vector<Move>& dst, std::vector<Move>&& src)
 	{
 		if (!src.empty())
@@ -361,6 +424,71 @@ namespace game
 				ret += _T("] -> ");
 			}
 			ret += CString(j.To());
+		}
+
+		return ret;
+	}
+
+	bool Checkers::Do(Jump const& j)
+	{
+		brd.Make(j);   // existing: applies the jump, no SwitchPlayer()
+
+		if (j.IsKiller() && !GetContinuation(j.To()).empty())
+			forced = j.To();
+		else
+		{
+			forced = {};
+			SwitchPlayer();
+		}
+
+		return forced;   // turn is over
+	}
+
+	std::vector<double> Checkers::mask_and_softmax(std::vector<double> const& raw_logits, std::vector<size_t> const& legal_indices)
+	{
+		std::vector probs(raw_logits.size(), .0);
+
+		// subtract max (over legal moves only) before exponentiating —
+		// avoids overflow if a logit is large, standard softmax stability trick
+		auto max_logit{ -std::numeric_limits<double>::infinity() };
+
+		for (auto idx : legal_indices)
+			max_logit = (std::max)(max_logit, raw_logits[idx]);
+
+
+		for (auto idx : legal_indices)
+			probs[idx] = std::exp(raw_logits[idx] - max_logit);
+
+		auto sum{ .0 };
+		//std::accumulate(legal_indices.begin(), legal_indices.end(), .0, []() {});
+
+		for (auto idx : legal_indices)
+			sum += probs[idx];
+
+		for (auto idx : legal_indices)
+			probs[idx] /= sum;
+
+		return probs;   // size 896, zero everywhere except legal_indices, sums to 1
+	}
+
+	std::vector<double> Checkers::encode_board()const
+	{
+		return brd.encode_board(IsWhiteTurn());
+	}
+
+	std::vector<size_t> Checkers::encode_legal_moves()const
+	{
+		auto const moves{ forced ? GetContinuation(forced) : GetAvailableMoves() };
+		bool const isWhite{ IsWhiteTurn() };
+
+		std::vector<size_t> ret;
+		ret.reserve(moves.size());
+
+		for (auto const& move : moves)
+		{
+			auto const idx{ move.front().to_policy_index(isWhite) };
+			if (std::find(ret.begin(), ret.end(), idx) == ret.end())
+				ret.push_back(idx);
 		}
 
 		return ret;

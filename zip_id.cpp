@@ -83,4 +83,9 @@ namespace id
 	{
 		rank.set(index, isQueen);
 	}
+	
+	bool zip64::is_dark_square(size_t index)
+	{
+		return (index / 8 + index % 8) % 2 == 0;   // true = dark/playable square
+	}
 }

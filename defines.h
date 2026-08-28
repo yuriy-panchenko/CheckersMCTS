@@ -5,8 +5,8 @@
 namespace game
 {
 	enum class Color :bool { White, Black, };
-
 	enum class Rank :bool { Pawn, Queen, };
+	enum class Wind { NW, NE, SW, SE, };
 
 	struct Piece
 	{
@@ -59,7 +59,7 @@ namespace game
 		Row row{ -1 };
 		Column col{ -1 };
 
-		operator bool()const { return row.valid() && col.valid(); }
+		explicit operator bool()const { return row.valid() && col.valid(); }
 		operator size_t()const { return index(); }
 		int index()const { return (*this) ? row * 8 + col : -1; }
 		Position operator+(Position)const;
@@ -78,6 +78,9 @@ namespace game
 		Position To()const { return to; }
 		Position Kill()const { return kill; }
 		bool IsKiller()const { return kill != Position{}; }
+		Wind Direction()const;
+		size_t Distance()const;
+		size_t to_policy_index(bool isWhite)const;
 	};
 
 	using Move = std::vector<Jump>;
@@ -89,7 +92,6 @@ namespace game
 
 	class Board
 	{
-		//Piece* field[8][8];
 		id::zip64 fld;
 
 	public:
@@ -102,13 +104,15 @@ namespace game
 		/*
 		Piece operator[](Position)const;*/
 		std::vector<Move> available_moves(game::Position)const;
-		void MakeJump(Jump);
+		void Make(Jump);
 		std::vector<location> GetPieces(Color)const;
 		void init();
 		void SetPieces(std::vector<location> const&);
 		void Clear();
 		auto GetZipID()const { return fld; }
 		void SetZipID(id::zip64 z) { fld = z; }
+		
+		std::vector<double> encode_board(bool isWhite)const;
 	};
 
 	//class Player {};
@@ -117,18 +121,28 @@ namespace game
 	{
 		Board brd;
 		Color next_move;
+		Position forced;
 
 	public:
 		Checkers(Color first_move = Color::White);
 
 		std::vector<Move> GetAvailableMoves()const;
-		std::vector<Move> GetAvailableMoves(Position)const;
-		void Do(Jump const&);
+		//std::vector<Move> GetAvailableMoves(Position)const;
+		std::vector<Move> GetContinuation(Position)const;
 		std::vector<Move> Do(Move const&);
+		bool Do(Jump const& j);
 		Color SwitchPlayer();
 		Color WhoMakesTurn()const { return next_move; }
 		auto& GetBoard()const { return brd; }
 		auto& GetBoard() { return brd; }
 		void SetZipID(id::zip64);
+		bool IsWhiteTurn()const;
+
+		std::vector<double> encode_board()const;
+		std::vector<size_t> encode_legal_moves()const;
+		static std::vector<double> mask_and_softmax(std::vector<double> const& raw_logits, std::vector<size_t> const& legal_indices);
+	
+	private:
+		//void Do(Jump const&);
 	};
 }

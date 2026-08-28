@@ -53,5 +53,6 @@ namespace id
 		bool is_queen(size_t index/*0..63*/)const { return rank.test(index); }
 		std::bitset<64> get_color()const { return color & location; }
 		std::bitset<64> get_rank()const { return rank & location; }
+		static bool is_dark_square(size_t index);
 	};
 }
