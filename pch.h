@@ -11,6 +11,8 @@
 #include "framework.h"
 #include <cassert>
 #include <chrono>
+#include <stack>
+#include <map>
 //#include "D:\Simon projects\NeuralNetworks\nnet.h"
 //#include "D:\Simon projects\NeuralNetworks\NNetProxy.h"
 #include "D:\Simon projects\NeuralNetworks\CheckersNet.h"

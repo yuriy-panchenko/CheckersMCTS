@@ -81,6 +81,7 @@ namespace game
 		Wind Direction()const;
 		size_t Distance()const;
 		size_t to_policy_index(bool isWhite)const;
+		bool operator==(Jump const&)const;
 	};
 
 	using Move = std::vector<Jump>;
@@ -129,7 +130,7 @@ namespace game
 		std::vector<Move> GetAvailableMoves()const;
 		//std::vector<Move> GetAvailableMoves(Position)const;
 		std::vector<Move> GetContinuation(Position)const;
-		std::vector<Move> Do(Move const&);
+		void Do(Move const&);
 		bool Do(Jump const& j);
 		Color SwitchPlayer();
 		Color WhoMakesTurn()const { return next_move; }

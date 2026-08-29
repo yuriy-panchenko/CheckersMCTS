@@ -5,8 +5,7 @@
 
 #pragma once
 #include "defines.h"
-#include <stack>
-#include <map>
+#include "mcts.h"
 
 class CCheckersDoc : public CDocument
 {
@@ -55,10 +54,6 @@ protected:
 	afx_msg void OnUpdateIdsIndicatorMoveCount(CCmdUI* pCmdUI);
 	afx_msg void OnStartPause();
 	afx_msg void OnUpdateStartPause(CCmdUI* pCmdUI);
-	afx_msg void OnEditUndo();
-	afx_msg void OnUpdateEditUndo(CCmdUI* pCmdUI);
-	afx_msg void OnEditRedo();
-	afx_msg void OnUpdateEditRedo(CCmdUI* pCmdUI);
 	DECLARE_MESSAGE_MAP()
 
 #ifdef SHARED_HANDLERS
@@ -72,15 +67,15 @@ private:
 	void EndGame();
 	void UpdatePicture();
 	BOOL Test4Stale();
+	auto const& GetGame()const { return m_Tree.current_state(); }
+	void TestEndOfGame();
 
 	BOOL m_isWhiteHuman, m_isBlackHuman;
-	game::Checkers m_Game;
 	Moves m_PossibleMoves;
-	std::vector<Hist> m_Undo;
-	std::stack<Hist> m_Redo;
 	std::map<id::zip64, size_t> m_idCount;
 	UINT_PTR m_idTimer;
 	SIZE_T m_uGameCount, m_uMoveCount, m_winWhite, m_winBlack, m_wNoCh, m_bNoCh;
 	double m_wPosibleTotal, m_bPosTotal;
+	mcts::MCTS m_Tree;
 	NNet m_Net;
 };

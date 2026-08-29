@@ -6,9 +6,17 @@ namespace mcts
 {
 	MCTS::MCTS(game::Checkers const& initial_state, chk::net& _net, double _c_puct)
 		:root{ std::make_unique<Node>(initial_state) }
-		, net{ _net }
+		, pNet{ &_net }
 		, c_puct{ _c_puct }
 	{}
+
+	MCTS& MCTS::operator=(MCTS&& oth)
+	{
+		root = std::move(oth.root);
+		pNet = oth.pNet;
+		c_puct = oth.c_puct;
+		return *this;
+	}
 
 	void MCTS::run_simulation()
 	{
@@ -43,6 +51,23 @@ namespace mcts
 		return ret;
 	}
 
+	void MCTS::advance_root(game::Move const& move)
+	{
+		for (auto const& jump : move)
+		{
+			auto it{ std::find_if(root->edges.begin(), root->edges.end(),
+				[&](Edge const& e) {return e.j == jump; }) };
+
+			if (it != root->edges.end() && it->child)
+				root = std::move(it->child);   // reuse existing subtree
+			else
+			{
+				root = std::make_unique<Node>(root->state);   // fresh node, no stats to reuse
+				root->state.Do(jump);
+			}
+		}
+	}
+
 	double MCTS::expand(Node& node, std::vector<game::Move> const& legal_moves)
 	{
 		node.expanded = true;
@@ -61,13 +86,13 @@ namespace mcts
 			}
 		}
 
-		net.think(node.state.encode_board());
-		auto const priors{ mask_and_softmax(net.policy_logits(), legal_indices) };
+		pNet->think(node.state.encode_board());
+		auto const priors{ mask_and_softmax(pNet->policy_logits(), legal_indices) };
 
 		for (auto& e : node.edges)
 			e.PriorProb = priors[e.action_index];
 
-		return net.value();
+		return pNet->value();
 	}
 
 	Edge& MCTS::select_edge(Node& node)

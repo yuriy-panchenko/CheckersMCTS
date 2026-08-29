@@ -30,10 +30,14 @@ namespace mcts
 	{
 	public:
 		MCTS(game::Checkers const& initial_state, chk::net& _net, double _c_puct = 1.5);
+		MCTS& operator=(MCTS&&);
+
 		void run_simulation();
 		game::Move select_move()const;
+		void advance_root(game::Move const& move);
 
 		void debug_dump_root(int top_n)const;
+		auto& current_state()const { return root->state; }
 
 	private:
 		double expand(Node& node, std::vector<game::Move> const& legal_moves);
@@ -43,7 +47,7 @@ namespace mcts
 
 	private:
 		std::unique_ptr<Node> root;
-		chk::net& net;
+		chk::net* pNet;
 		double c_puct;
 	};
 }

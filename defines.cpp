@@ -51,12 +51,11 @@ namespace game
 		return is_kills(ret) ? ret : std::vector<Move>{};
 	}
 
-	std::vector<Move> Checkers::Do(Move const& m)
+	void Checkers::Do(Move const& m)
 	{
 		for (auto& j : m)
 			brd.Make(j);
 		SwitchPlayer();
-		return GetAvailableMoves();
 	}
 
 	bool Checkers::Do(Jump const& j)
@@ -391,6 +390,13 @@ namespace game
 		}
 
 		return square_id * 28ull + dir * 7ull + (Distance() - 1ull);   // 28 = 4 dirs * 7 distances
+	}
+
+	bool Jump::operator==(Jump const& oth) const
+	{
+		return from == oth.from
+			&& to == oth.to
+			&& kill == oth.kill;
 	}
 
 	void operator+=(std::vector<Move>& dst, std::vector<Move>&& src)

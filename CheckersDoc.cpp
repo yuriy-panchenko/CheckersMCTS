@@ -13,12 +13,14 @@
 #endif
 
 #include "CheckersDoc.h"
-#include "mcts.h"
 
 #include <propkey.h>
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
+#define SIMULATION_COUNT	(100)
+#else
+#define SIMULATION_COUNT	(5'000)
 #endif
 
 #define TIMER_ELLAPLE	(100)
@@ -38,24 +40,37 @@ BEGIN_MESSAGE_MAP(CCheckersDoc, CDocument)
 	ON_UPDATE_COMMAND_UI(IDS_INDICATOR_MOVE_COUNT, &CCheckersDoc::OnUpdateIdsIndicatorMoveCount)
 	ON_COMMAND(ID_START_PAUSE, &CCheckersDoc::OnStartPause)
 	ON_UPDATE_COMMAND_UI(ID_START_PAUSE, &CCheckersDoc::OnUpdateStartPause)
-	ON_COMMAND(ID_EDIT_UNDO, &CCheckersDoc::OnEditUndo)
-	ON_UPDATE_COMMAND_UI(ID_EDIT_UNDO, &CCheckersDoc::OnUpdateEditUndo)
-	ON_COMMAND(ID_EDIT_REDO, &CCheckersDoc::OnEditRedo)
-	ON_UPDATE_COMMAND_UI(ID_EDIT_REDO, &CCheckersDoc::OnUpdateEditRedo)
 END_MESSAGE_MAP()
 
 // CCheckersDoc construction/destruction
 
 CCheckersDoc::CCheckersDoc() noexcept
-	:m_isWhiteHuman{ FALSE }
+	:m_isWhiteHuman{ TRUE }
 	, m_isBlackHuman{ FALSE }
-	, m_Game{ Color::White }
 	, m_idTimer{ 0 }
 	, m_uGameCount{}
 	, m_uMoveCount{}
 	, m_winWhite{}
 	, m_winBlack{}
+	, m_Tree{ Checkers{ Color::White }, m_Net }
 {
+	class ms_timer
+	{
+		std::chrono::steady_clock::time_point from;
+		size_t mss;
+	public:
+		ms_timer() :from{ std::chrono::steady_clock::now() }, mss{} {}
+		size_t stop()
+		{
+			return mss = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - from).count();
+		}
+		void out_dbg(size_t sample_count = 1ull)
+		{
+			CString str;
+			str.Format(_T("Total time over %I64u samples is %I64u(ms). Average %.3f(ms)/sample"), sample_count, mss, double(mss) / sample_count);
+			OutputDebugString(str);
+		}
+	};
 	/*long long diff{};
 	auto const start{ std::chrono::steady_clock::now() };
 
@@ -75,35 +90,36 @@ CCheckersDoc::CCheckersDoc() noexcept
 	OutputDebugString(str);*/
 
 	/*
-	m_Net.init();
 	m_Net.think(encode_board(m_Game));								// 1. forward pass
 	auto legal = encode_legal_moves(m_Game, rules_engine_output);	// 2. your move-encoding step maps legal Jumps → indices
 	auto priors = mask_and_softmax(m_Net.policy_logits(), legal);	// 3. masking + softmax happens here
 	double v = m_Net.value();											// 4. value head, no masking needed (scalar)
 	*/
 
+	/*
 	Position pos{ Row{1}, Column{1} };
-	auto s{pos.operator CString()};
+	auto s{ pos.operator CString() };
 
 	NNet net;
 	net.init();
-	MCTS search(m_Game, net);
+	MCTS search{ m_Game, net };
 
-	Position p{ Row{1}, Column{1} };
-	Jump j{ p, p, p };
-	
+	auto const N{ 1'000 };
+	ms_timer t;
 
-	for (int i = 0; i < 1000; ++i)
+	for (int i = 0; i < N; ++i)
 		search.run_simulation();
 
-	/*
-	*/
+	t.stop();
+	t.out_dbg(N);
 	search.debug_dump_root(20);
+	*/
+	m_Net.init();
 }
 
 game::Board const& CCheckersDoc::GetBoard() const
 {
-	return m_Game.GetBoard();
+	return m_Tree.current_state().GetBoard();
 }
 
 BOOL CCheckersDoc::IsMoveable(game::Position pos) const
@@ -145,7 +161,9 @@ BOOL CCheckersDoc::IsHuman(game::Color col) const
 
 void CCheckersDoc::MakeMove(game::Move const& m)
 {
-	if (!m.empty())
+	if (m.empty())
+		m_Tree.current_state().Do(m);
+	else
 	{
 		++m_uMoveCount;
 		auto pMain{ static_cast<CMainFrame*>(theApp.GetMainWnd()) };
@@ -153,10 +171,15 @@ void CCheckersDoc::MakeMove(game::Move const& m)
 		CString str;
 		str.Format(_T("%I64u : %s, %I64u poss"), m_uMoveCount, ToString(m), m_PossibleMoves.size());
 		pMain->GetOutputWnd().AddBuildString(str);
-		m_Undo.push_back({ m_Game.GetBoard().GetZipID(), m });
+		m_Tree.advance_root(m);
 	}
+	m_PossibleMoves = GetGame().GetAvailableMoves();
 
-	m_PossibleMoves = m_Game.Do(m);
+	TestEndOfGame();
+}
+
+void CCheckersDoc::TestEndOfGame()
+{
 	if (!m_PossibleMoves.empty() && Test4Stale())
 	{
 		//EndGame(!m_Game.WhoMakesTurn());
@@ -166,37 +189,27 @@ void CCheckersDoc::MakeMove(game::Move const& m)
 
 	if (!m_PossibleMoves.empty())
 	{
-		(m_Game.WhoMakesTurn() == Color::White ? m_wPosibleTotal : m_bPosTotal) *= m_PossibleMoves.size();
-		(m_Game.WhoMakesTurn() == Color::White ? m_wNoCh : m_bNoCh) += m_PossibleMoves.size() - 1;
+		(GetGame().WhoMakesTurn() == Color::White ? m_wPosibleTotal : m_bPosTotal) *= m_PossibleMoves.size();
+		(GetGame().WhoMakesTurn() == Color::White ? m_wNoCh : m_bNoCh) += m_PossibleMoves.size() - 1;
 	}
-
-	//	testing moves for ambiguity
-	/*for (auto it1{ m_PossibleMoves.begin() }; it1 != m_PossibleMoves.end(); ++it1)
-		for (auto it2{ std::next(it1) }; it2 != m_PossibleMoves.end(); ++it2)
-		{
-			bool const sameStart{ it1->front().From() == it2->front().From() };
-			bool const sameEnd{ it1->back().To() == it2->back().To() };
-			assert(!(sameStart && sameEnd));
-		}*/
 
 	if (m_PossibleMoves.empty())
-		EndGame(!m_Game.WhoMakesTurn());
-	else if (!IsHuman(m_Game.WhoMakesTurn()))
+		EndGame(!GetGame().WhoMakesTurn());
+	else if (!IsHuman(GetGame().WhoMakesTurn()))
 		m_idTimer = ::SetTimer(NULL, 0, TIMER_ELLAPLE, AutoMoveProc);
 }
-
 void CCheckersDoc::AutoMove()
 {
-	if (m_Redo.empty())
-	{
-		//MakeMove(m_PossibleMoves.front());
-		MakeMove(m_PossibleMoves[rand() % m_PossibleMoves.size()]);
-	}
-	else
-	{
-		//m = Convert(m_Redo.top());
-		//m_Redo.pop();
-	}
+	//MakeMove(m_PossibleMoves[rand() % m_PossibleMoves.size()]);
+	::CWaitCursor _;
+	for (size_t i = 0; i < SIMULATION_COUNT; ++i)
+		m_Tree.run_simulation();
+
+	MakeMove(m_Tree.select_move());
+	/*auto const m{ m_Tree.select_move() };
+	m_Tree.advance_root(m);
+	m_PossibleMoves = GetGame().GetAvailableMoves();
+	TestEndOfGame();*/
 
 	UpdatePicture();
 }
@@ -210,12 +223,11 @@ void CCheckersDoc::EndGame(Color winner)
 	else ++m_winBlack;
 
 	CString str;
-	str.Format(_T("%I64u ..%s.. [%I64u:%I64u], mvs = %d, WhPos=%g, BlPos=%g, wNo:%I64u, bNo:%I64u"),
+	str.Format(_T("%I64u ..%s.. [%I64u:%I64u], WhPos=%g, BlPos=%g, wNo:%I64u, bNo:%I64u"),
 		m_winWhite + m_winBlack,
 		(winner == Color::White ? _T("W") : _T("B")),
 		m_winWhite,
 		m_winBlack,
-		m_Undo.size(),
 		m_wPosibleTotal,
 		m_bPosTotal,
 		m_wNoCh,
@@ -235,12 +247,11 @@ void CCheckersDoc::EndGame()
 	UpdatePicture();
 
 	CString str;
-	str.Format(_T("%I64u ..%s.. [%I64u:%I64u], mvs = %d, WhPos=%g, BlPos=%g, wNo:%I64u, bNo:%I64u"),
+	str.Format(_T("%I64u ..%s.. [%I64u:%I64u], WhPos=%g, BlPos=%g, wNo:%I64u, bNo:%I64u"),
 		m_winWhite + m_winBlack,
 		_T("X"),
 		m_winWhite,
 		m_winBlack,
-		m_Undo.size(),
 		m_wPosibleTotal,
 		m_bPosTotal,
 		m_wNoCh,
@@ -271,13 +282,11 @@ BOOL CCheckersDoc::OnNewDocument()
 
 	++m_uGameCount;
 	m_uMoveCount = 0;
-	m_Undo = {};
-	m_Redo = {};
 	m_wPosibleTotal = m_bPosTotal = 1.;
 	m_wNoCh = m_bNoCh = 0ULL;
 	m_idCount.clear();
 
-	m_Game = { Color::Black };
+	m_Tree = MCTS{ { Color::Black }, m_Net };
 	/*
 	m_Game.GetBoard().Clear();
 	m_Game.GetBoard().SetPieces({
@@ -396,9 +405,9 @@ void CCheckersDoc::AutoMoveProc(HWND hWnd, UINT uMsg, UINT_PTR idEvent, DWORD dw
 void CCheckersDoc::OnUpdateIdsIndicatorWhite(CCmdUI* pCmdUI)
 {
 	CString str;
-	str.Format(_T("White %d"), m_Game.GetBoard().GetPieces(Color::White).size());
+	str.Format(_T("White %d"), GetBoard().GetPieces(Color::White).size());
 	pCmdUI->SetText(str);
-	pCmdUI->Enable(m_Game.WhoMakesTurn() == Color::White);
+	pCmdUI->Enable(GetGame().WhoMakesTurn() == Color::White);
 }
 
 
@@ -412,9 +421,9 @@ void CCheckersDoc::OnUpdateIdsIndicatorPossibleMoves(CCmdUI* pCmdUI)
 void CCheckersDoc::OnUpdateIdsIndicatorBlack(CCmdUI* pCmdUI)
 {
 	CString str;
-	str.Format(_T("Black %d"), m_Game.GetBoard().GetPieces(Color::Black).size());
+	str.Format(_T("Black %d"), GetBoard().GetPieces(Color::Black).size());
 	pCmdUI->SetText(str);
-	pCmdUI->Enable(m_Game.WhoMakesTurn() == Color::Black);
+	pCmdUI->Enable(GetGame().WhoMakesTurn() == Color::Black);
 }
 
 void CCheckersDoc::OnUpdateIdsIndicatorGameCount(CCmdUI* pCmdUI)
@@ -447,45 +456,8 @@ void CCheckersDoc::OnUpdateStartPause(CCmdUI* pCmdUI)
 	pCmdUI->Enable(!(IsHuman(Color::White) && IsHuman(Color::Black)));
 }
 
-void CCheckersDoc::OnEditUndo()
-{
-	auto m{ m_Undo.back() };
-	m_Redo.push(m);
-	m_Undo.pop_back();
-
-	m_Game.SwitchPlayer();
-	m_Game.SetZipID(m.state);
-	m_PossibleMoves = m_Game.GetAvailableMoves();
-
-	((CMainFrame*)theApp.GetMainWnd())->GetOutputWnd().RemoveBuildString();
-
-	UpdatePicture();
-}
-
-void CCheckersDoc::OnUpdateEditUndo(CCmdUI* pCmdUI)
-{
-	pCmdUI->Enable(!m_Undo.empty() && !m_idTimer);
-}
-
-void CCheckersDoc::OnEditRedo()
-{
-	auto m{ m_Redo.top() };
-	m_Redo.pop();
-	m_Undo.push_back(m);
-
-	m_Game.SwitchPlayer();
-	m_Game.SetZipID(m.state);
-
-	MakeMove(m.m);
-	UpdatePicture();
-}
-
-void CCheckersDoc::OnUpdateEditRedo(CCmdUI* pCmdUI)
-{
-	pCmdUI->Enable(!m_Redo.empty() && !m_idTimer);
-}
 
 BOOL CCheckersDoc::Test4Stale()
 {
-	return ++m_idCount[m_Game.GetBoard().GetZipID()] >= 3ull;
+	return ++m_idCount[GetBoard().GetZipID()] >= 3ull;
 }
