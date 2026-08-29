@@ -6,23 +6,17 @@ namespace mcts
 {
 	struct Node;
 
-	//struct SearchState
-	//{
-	//	game::Checkers game;                    // full snapshot — cheap to copy, it's just bitboards
-	//	game::Position forced;   // set if mid-chain; determines GetAvailableMoves() vs GetAvailableMoves(pos)
-	//};
-
 	struct Edge
 	{
 		int    action_index;   // policy vector index (from jump_to_policy_index)
 		game::Jump   j;           // the actual Jump to apply if this edge is taken
-		double P;              // prior probability, from mask_and_softmax at parent expansion
-		int    N = 0;           // visit count
-		double W = 0.0;         // total backed-up value
-		double Q = 0.0;         // mean value = W / N (0 if N == 0)
+		double PriorProb;              // prior probability, from mask_and_softmax at parent expansion
+		int    Visits = 0;           // visit count
+		double BackedUp = 0.0;         // total backed-up value
+		double Mean = 0.0;         // mean value = W / N (0 if N == 0)
 		std::unique_ptr<Node> child;   // null until this edge is first traversed (lazy expansion)
 	};
-	
+
 	struct Node
 	{
 		game::Checkers state;
@@ -34,10 +28,22 @@ namespace mcts
 
 	class MCTS
 	{
-		std::unique_ptr<Node> root;
 	public:
-		explicit MCTS(game::Checkers const& initial_state);
-		void run_simulation();     // one selection→expansion→backup pass — next step
-		game::Move select_move() const;  // pick real move from root edge visit counts — later step
+		MCTS(game::Checkers const& initial_state, chk::net& _net, double _c_puct = 1.5);
+		void run_simulation();
+		game::Move select_move()const;
+
+		void debug_dump_root(int top_n)const;
+
+	private:
+		double expand(Node& node, std::vector<game::Move> const& legal_moves);
+		Edge& select_edge(Node& node);
+		double select_and_expand(Node& node);
+		static std::vector<double> mask_and_softmax(std::vector<double> const& raw_logits, std::vector<size_t> const& legal_indices);
+
+	private:
+		std::unique_ptr<Node> root;
+		chk::net& net;
+		double c_puct;
 	};
 }

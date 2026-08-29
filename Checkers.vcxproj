@@ -218,6 +218,7 @@
     <ClCompile Include="CheckersView.cpp" />
     <ClCompile Include="defines.cpp" />
     <ClCompile Include="MainFrm.cpp" />
+    <ClCompile Include="mcts.cpp" />
     <ClCompile Include="OutputWnd.cpp" />
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
@@ -229,6 +230,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="Checkers.reg" />
+    <None Include="mcts_checkers_project_status.md" />
     <None Include="res\Checkers.rc2" />
   </ItemGroup>
   <ItemGroup>
@@ -245,6 +247,9 @@
   </ItemGroup>
   <ItemGroup>
     <Text Include="Architecture.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Natvis Include="NatvisFile.natvis" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

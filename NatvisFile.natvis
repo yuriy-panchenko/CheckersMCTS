@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
+
+  <Type Name="game::Row">
+    <DisplayString Condition="index==0">8</DisplayString>
+    <DisplayString Condition="index==1">7</DisplayString>
+    <DisplayString Condition="index==2">6</DisplayString>
+    <DisplayString Condition="index==3">5</DisplayString>
+    <DisplayString Condition="index==4">4</DisplayString>
+    <DisplayString Condition="index==5">3</DisplayString>
+    <DisplayString Condition="index==6">2</DisplayString>
+    <DisplayString Condition="index==7">1</DisplayString>
+    <DisplayString>invalid</DisplayString>
+  </Type>
+
+  <Type Name="game::Column">
+    <DisplayString Condition="index==0">A</DisplayString>
+    <DisplayString Condition="index==1">B</DisplayString>
+    <DisplayString Condition="index==2">C</DisplayString>
+    <DisplayString Condition="index==3">D</DisplayString>
+    <DisplayString Condition="index==4">E</DisplayString>
+    <DisplayString Condition="index==5">F</DisplayString>
+    <DisplayString Condition="index==6">G</DisplayString>
+    <DisplayString Condition="index==7">H</DisplayString>
+    <DisplayString>invalid</DisplayString>
+  </Type>
+
+  <Type Name="game::Position">
+    <DisplayString>{col}{row}</DisplayString>
+  </Type>
+
+  <Type Name="game::Jump">
+    <DisplayString Condition="kill.row.index &gt;= 0 &amp;&amp; kill.row.index &lt;= 7 &amp;&amp; kill.col.index &gt;= 0 &amp;&amp; kill.col.index &lt;= 7">{from} -&gt; {to} [{kill}]</DisplayString>
+    <DisplayString>{from} -&gt; {to}</DisplayString>
+  </Type>
+
+</AutoVisualizer>

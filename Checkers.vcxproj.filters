@@ -80,12 +80,16 @@
     <ClCompile Include="zip_id.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="mcts.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="Checkers.reg" />
     <None Include="res\Checkers.rc2">
       <Filter>Resource Files</Filter>
     </None>
+    <None Include="mcts_checkers_project_status.md" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Checkers.rc">
@@ -117,5 +121,8 @@
   </ItemGroup>
   <ItemGroup>
     <Text Include="Architecture.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Natvis Include="NatvisFile.natvis" />
   </ItemGroup>
 </Project>

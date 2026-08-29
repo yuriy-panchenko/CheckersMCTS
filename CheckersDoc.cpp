@@ -13,6 +13,7 @@
 #endif
 
 #include "CheckersDoc.h"
+#include "mcts.h"
 
 #include <propkey.h>
 
@@ -23,6 +24,7 @@
 #define TIMER_ELLAPLE	(100)
 
 using namespace game;
+using namespace mcts;
 
 // CCheckersDoc
 
@@ -47,6 +49,7 @@ END_MESSAGE_MAP()
 CCheckersDoc::CCheckersDoc() noexcept
 	:m_isWhiteHuman{ FALSE }
 	, m_isBlackHuman{ FALSE }
+	, m_Game{ Color::White }
 	, m_idTimer{ 0 }
 	, m_uGameCount{}
 	, m_uMoveCount{}
@@ -70,17 +73,32 @@ CCheckersDoc::CCheckersDoc() noexcept
 	CString str;
 	str.Format(_T("Total over 1000 is %.2f ms"), diff / 1'000'000.);
 	OutputDebugString(str);*/
-	
-	/*auto b = is_dark_square(0);
-	b = is_dark_square(1);
-	b = is_dark_square(2);
 
+	/*
 	m_Net.init();
-
 	m_Net.think(encode_board(m_Game));								// 1. forward pass
 	auto legal = encode_legal_moves(m_Game, rules_engine_output);	// 2. your move-encoding step maps legal Jumps → indices
 	auto priors = mask_and_softmax(m_Net.policy_logits(), legal);	// 3. masking + softmax happens here
-	double v = m_Net.value();*/												// 4. value head, no masking needed (scalar)
+	double v = m_Net.value();											// 4. value head, no masking needed (scalar)
+	*/
+
+	Position pos{ Row{1}, Column{1} };
+	auto s{pos.operator CString()};
+
+	NNet net;
+	net.init();
+	MCTS search(m_Game, net);
+
+	Position p{ Row{1}, Column{1} };
+	Jump j{ p, p, p };
+	
+
+	for (int i = 0; i < 1000; ++i)
+		search.run_simulation();
+
+	/*
+	*/
+	search.debug_dump_root(20);
 }
 
 game::Board const& CCheckersDoc::GetBoard() const

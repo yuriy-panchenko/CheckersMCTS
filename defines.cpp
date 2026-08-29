@@ -27,12 +27,16 @@ namespace game
 
 	Checkers::Checkers(Color first_move)
 		:next_move{ first_move }
+		, forced{}
 	{
 		brd.init();
 	}
 
 	std::vector<Move> Checkers::GetAvailableMoves()const
 	{
+		if (forced)
+			return GetContinuation(forced);
+
 		std::vector<Move> ret;
 
 		for (auto const& [p, pos] : brd.GetPieces(next_move))
@@ -47,20 +51,27 @@ namespace game
 		return is_kills(ret) ? ret : std::vector<Move>{};
 	}
 
-	//void Checkers::Do(Jump const& j)
-	//{
-	//	ASSERT(brd[j.From()]);	//	have piece
-	//	ASSERT(!brd[j.To()]);	//	empty
-	//	//return
-	//	brd.MakeJump(j);
-	//}
-
 	std::vector<Move> Checkers::Do(Move const& m)
 	{
 		for (auto& j : m)
 			brd.Make(j);
 		SwitchPlayer();
 		return GetAvailableMoves();
+	}
+
+	bool Checkers::Do(Jump const& j)
+	{
+		brd.Make(j);   // existing: applies the jump, no SwitchPlayer()
+
+		if (j.IsKiller() && !GetContinuation(j.To()).empty())
+			forced = j.To();
+		else
+		{
+			forced = {};
+			SwitchPlayer();
+		}
+
+		return forced;   // turn is over
 	}
 
 	Color Checkers::SwitchPlayer()
@@ -325,8 +336,12 @@ namespace game
 
 	Position::operator CString() const
 	{
-		wchar_t const ret[] = { col.to_wchar(), row.to_wchar(), L'\0', };
-		return ret;
+		if (!*this)
+			return _T("invalid");
+
+		CString result;
+		result.Format(_T("%c%c"), col.to_char(), row.to_char());
+		return result;
 	}
 
 	Line& Line::operator++()
@@ -355,9 +370,9 @@ namespace game
 	Wind Jump::Direction() const
 	{
 		if (from.col < to.col)	//	going East
-			return from.row < to.row ? Wind::NE : Wind::SE;
+			return from.row > to.row ? Wind::NE : Wind::SE;
 		else
-			return from.row < to.row ? Wind::NW : Wind::SW;
+			return from.row > to.row ? Wind::NW : Wind::SW;
 	}
 
 	size_t Jump::Distance() const
@@ -427,48 +442,6 @@ namespace game
 		}
 
 		return ret;
-	}
-
-	bool Checkers::Do(Jump const& j)
-	{
-		brd.Make(j);   // existing: applies the jump, no SwitchPlayer()
-
-		if (j.IsKiller() && !GetContinuation(j.To()).empty())
-			forced = j.To();
-		else
-		{
-			forced = {};
-			SwitchPlayer();
-		}
-
-		return forced;   // turn is over
-	}
-
-	std::vector<double> Checkers::mask_and_softmax(std::vector<double> const& raw_logits, std::vector<size_t> const& legal_indices)
-	{
-		std::vector probs(raw_logits.size(), .0);
-
-		// subtract max (over legal moves only) before exponentiating —
-		// avoids overflow if a logit is large, standard softmax stability trick
-		auto max_logit{ -std::numeric_limits<double>::infinity() };
-
-		for (auto idx : legal_indices)
-			max_logit = (std::max)(max_logit, raw_logits[idx]);
-
-
-		for (auto idx : legal_indices)
-			probs[idx] = std::exp(raw_logits[idx] - max_logit);
-
-		auto sum{ .0 };
-		//std::accumulate(legal_indices.begin(), legal_indices.end(), .0, []() {});
-
-		for (auto idx : legal_indices)
-			sum += probs[idx];
-
-		for (auto idx : legal_indices)
-			probs[idx] /= sum;
-
-		return probs;   // size 896, zero everywhere except legal_indices, sums to 1
 	}
 
 	std::vector<double> Checkers::encode_board()const

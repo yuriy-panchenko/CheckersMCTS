@@ -34,11 +34,11 @@ namespace game
 	{
 	public:
 		Row() = default;
-		explicit Row(char);
 		explicit Row(int i)
 			:Line{ i } {}
 
 		wchar_t to_wchar()const { return L'8' - index; }
+		char to_char()const { return '8' - index; }
 		bool top_half()const { return index < 4; }
 	};
 
@@ -48,10 +48,10 @@ namespace game
 	{
 	public:
 		Column() = default;
-		explicit Column(char);
 		explicit Column(int i)
 			:Line{ i } {}
 		wchar_t to_wchar()const { return L'A' + index; }
+		char to_char()const { return 'A' + index; }
 	};
 
 	struct Position
@@ -124,7 +124,7 @@ namespace game
 		Position forced;
 
 	public:
-		Checkers(Color first_move = Color::White);
+		Checkers(Color first_move);
 
 		std::vector<Move> GetAvailableMoves()const;
 		//std::vector<Move> GetAvailableMoves(Position)const;
@@ -140,7 +140,6 @@ namespace game
 
 		std::vector<double> encode_board()const;
 		std::vector<size_t> encode_legal_moves()const;
-		static std::vector<double> mask_and_softmax(std::vector<double> const& raw_logits, std::vector<size_t> const& legal_indices);
 	
 	private:
 		//void Do(Jump const&);
