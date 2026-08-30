@@ -22,6 +22,8 @@
 #define IDR_CheckersTYPE                130
 #define ID_VIEW_OUTPUTWND               149
 #define IDS_OUTPUT_WND                  157
+#define IDS_INDICATOR_ADJUSTS           158
+#define IDS_INDICATOR_LEARNS            159
 #define IDI_OUTPUT_WND                  165
 #define IDI_OUTPUT_WND_HC               166
 #define IDR_OUTPUT_POPUP                182

@@ -24,7 +24,7 @@
 #endif
 
 #define TIMER_ELLAPLE	(100)
-#define LEARNING_RATE	(.01)
+#define LEARNING_RATE	(.001)
 #define NNET_FILENAME	_T("net.bin")
 
 using namespace game;
@@ -44,6 +44,10 @@ BEGIN_MESSAGE_MAP(CCheckersDoc, CDocument)
 	ON_UPDATE_COMMAND_UI(ID_START_PAUSE, &CCheckersDoc::OnUpdateStartPause)
 	ON_COMMAND(ID_WHITE_HUMAN, &CCheckersDoc::OnWhiteHuman)
 	ON_UPDATE_COMMAND_UI(ID_WHITE_HUMAN, &CCheckersDoc::OnUpdateWhiteHuman)
+	ON_UPDATE_COMMAND_UI(IDS_INDICATOR_ADJUSTS, &CCheckersDoc::OnUpdateIdsIndicatorAdjusted)
+	ON_UPDATE_COMMAND_UI(IDS_INDICATOR_LEARNS, &CCheckersDoc::OnUpdateIdsIndicatorLearns)
+
+
 END_MESSAGE_MAP()
 
 // CCheckersDoc construction/destruction
@@ -430,7 +434,7 @@ void CCheckersDoc::OnUpdateIdsIndicatorWhite(CCmdUI* pCmdUI)
 void CCheckersDoc::OnUpdateIdsIndicatorPossibleMoves(CCmdUI* pCmdUI)
 {
 	CString str;
-	str.Format(_T("Ava %d"), m_PossibleMoves.size());
+	str.Format(_T("Av %d"), m_PossibleMoves.size());
 	pCmdUI->SetText(str);
 }
 
@@ -445,14 +449,28 @@ void CCheckersDoc::OnUpdateIdsIndicatorBlack(CCmdUI* pCmdUI)
 void CCheckersDoc::OnUpdateIdsIndicatorGameCount(CCmdUI* pCmdUI)
 {
 	CString str;
-	str.Format(_T("Adj: %I64u"), m_Net.get_adjusts());
+	str.Format(_T("G %I64u"), m_uGameCount);
+	pCmdUI->SetText(str);
+}
+
+void CCheckersDoc::OnUpdateIdsIndicatorAdjusted(CCmdUI* pCmdUI)
+{
+	CString str;
+	str.Format(_T("Aj %I64u"), m_Net.get_adjusts());
 	pCmdUI->SetText(str);
 }
 
 void CCheckersDoc::OnUpdateIdsIndicatorMoveCount(CCmdUI* pCmdUI)
 {
 	CString str;
-	str.Format(_T("Lrn: %I64u"), m_Net.get_learns());
+	str.Format(_T("M %I64u"), m_uMoveCount);
+	pCmdUI->SetText(str);
+}
+
+void CCheckersDoc::OnUpdateIdsIndicatorLearns(CCmdUI* pCmdUI)
+{
+	CString str;
+	str.Format(_T("Lr %I64u"), m_Net.get_learns());
 	pCmdUI->SetText(str);
 }
 
@@ -504,10 +522,11 @@ void CCheckersDoc::TrainOnSamples(std::optional<game::Color> winner)
 		m_Net.learn(dL_policy, s.real_value);
 	}
 
-	m_Net.adjust(LEARNING_RATE, m_Samples.size());
+	//m_Net.adjust(LEARNING_RATE, m_Samples.size());
+	m_Net.adjust(LEARNING_RATE);
 
 	CString str;
-	str.Format(_T("%I64u: win: %s [ %I64u:%I64u ] %zu moves, avg policy loss=%.4f, avg value loss=%.4f, value=%.4f"),
+	str.Format(_T("%I64u: %s [ %I64u:%I64u ] %zu moves, avg policy loss=%.4f, avg value loss=%.4f, value=%.4f"),
 		m_uGameCount,
 		winner ? (*winner == Color::White ? _T("W") : _T("B")) : _T("X"),
 		m_winWhite,

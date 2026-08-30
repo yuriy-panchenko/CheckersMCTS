@@ -66,6 +66,8 @@ protected:
 	afx_msg void OnUpdateIdsIndicatorMoveCount(CCmdUI* pCmdUI);
 	afx_msg void OnStartPause();
 	afx_msg void OnUpdateStartPause(CCmdUI* pCmdUI);
+	afx_msg void OnUpdateIdsIndicatorAdjusted(CCmdUI* pCmdUI);
+	afx_msg void OnUpdateIdsIndicatorLearns(CCmdUI* pCmdUI);
 	DECLARE_MESSAGE_MAP()
 
 #ifdef SHARED_HANDLERS
