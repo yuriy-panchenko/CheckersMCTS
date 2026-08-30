@@ -186,7 +186,6 @@ void CCheckersDoc::MakeMove(game::Move const& m)
 		++m_uMoveCount;
 
 		auto const& root{ m_Tree.get_root() };
-
 		int total_visits{};
 		for (auto const& e : root.edges)
 			total_visits += e.Visits;
@@ -317,19 +316,6 @@ BOOL CCheckersDoc::OnNewDocument()
 	m_idCount.clear();
 
 	m_Tree = MCTS{ { Color::Black }, m_Net };
-	/*
-	m_Game.GetBoard().Clear();
-	m_Game.GetBoard().SetPieces({
-		{ {Color::Black,Rank::Queen},{Row{1},Column{0}}} ,
-		{ {Color::White,Rank::Queen},{Row{0},Column{5}}} });
-	auto id1 = m_Game.GetBoard().GetZipID();
-	m_Game.Do(Jump{ {Row{0},Column{1}}, {Row{1},Column{0}} });
-	auto id2 = m_Game.GetBoard().GetZipID();
-	ASSERT(id1 != id2);
-	m_Game.Do(Jump{ {Row{1},Column{0}}, {Row{0},Column{1}} });
-	auto id3 = m_Game.GetBoard().GetZipID();
-	ASSERT(id1 == id3);*/
-
 	MakeMove({});
 
 	return TRUE;

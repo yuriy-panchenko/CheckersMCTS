@@ -34,6 +34,7 @@ public:
 	game::Move FindMove(game::Position from, game::Position to)const;
 	void MakeMove(game::Move const&);
 	void AutoMove();
+	auto& GetTree() { return m_Tree; }
 	// Operations
 public:
 

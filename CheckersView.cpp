@@ -339,6 +339,7 @@ void CCheckersView::OnLButtonDown(UINT nFlags, CPoint point)
 			}
 			else
 			{
+				GetDocument()->GetTree().run_simulation();
 				GetDocument()->MakeMove(m);
 				//GetDocument()->Add2History(m, TRUE);
 				//GetDocument()->
