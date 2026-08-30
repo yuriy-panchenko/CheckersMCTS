@@ -44,6 +44,12 @@ void CChatWnd::Load(std::ifstream& s, size_t element_count)
 {
 	m_Data.resize(element_count);
 	s.read((char*)m_Data.data(), element_count * sizeof(double));
+	if (!m_Data.empty())
+	{
+		m_Max = m_Min = m_Data.front();
+		for (auto db : m_Data)
+			m_Max = max(m_Max, db), m_Min = min(m_Min, db);
+	}
 }
 
 
@@ -88,6 +94,11 @@ void CChatWnd::Draw(CDC& dc, CSize const canv)
 
 	auto const CX{ m_Data.size() - 1ull };
 	auto const CY{ m_Max - m_Min };
+
+	//	draw horizontal lines
+	{
+		// we want lines to go through
+	}
 
 	auto to_scr = [&, this](int x, double y)->CPoint
 		{
