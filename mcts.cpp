@@ -159,6 +159,12 @@ namespace mcts
 		return value;
 	}
 
+	double MCTS::gamma_sample(double alpha) const
+	{
+		static std::mt19937 rng{ std::random_device{}() };
+		return std::gamma_distribution<double>(alpha, 1.0)(rng);
+	}
+
 	std::vector<double> MCTS::mask_and_softmax(std::vector<double> const& raw_logits, std::vector<size_t> const& legal_indices)
 	{
 		std::vector probs(raw_logits.size(), .0);
@@ -212,5 +218,24 @@ namespace mcts
 			if (++shown >= top_n)
 				break;
 		}
+	}
+
+	void MCTS::add_root_noise(double alpha, double eps)
+	{
+		auto& edges{ root->edges };
+		if (edges.empty()) return;
+
+		// sample from Dirichlet(alpha) via normalized Gammas
+		std::vector<double> noise(edges.size());
+		double sum{};
+		for (auto& n : noise)
+		{
+			n = gamma_sample(alpha);   // see below
+			sum += n;
+		}
+		for (auto& n : noise) n /= sum;
+
+		for (size_t i = 0; i < edges.size(); ++i)
+			edges[i].PriorProb = (1 - eps) * edges[i].PriorProb + eps * noise[i];
 	}
 }

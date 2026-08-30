@@ -184,14 +184,14 @@ void COutputList::OnContextMenu(CWnd* /*pWnd*/, CPoint point)
 
 	CMenu* pSumMenu = menu.GetSubMenu(0);
 
-	if (AfxGetMainWnd()->IsKindOf(RUNTIME_CLASS(CMDIFrameWndEx)))
+	if (AfxGetMainWnd()->IsKindOf(RUNTIME_CLASS(CFrameWndEx)))
 	{
 		CMFCPopupMenu* pPopupMenu = new CMFCPopupMenu;
 
 		if (!pPopupMenu->Create(this, point.x, point.y, (HMENU)pSumMenu->m_hMenu, FALSE, TRUE))
 			return;
 
-		((CMDIFrameWndEx*)AfxGetMainWnd())->OnShowPopupMenu(pPopupMenu);
+		((CFrameWndEx*)AfxGetMainWnd())->OnShowPopupMenu(pPopupMenu);
 		UpdateDialogControls(this, FALSE);
 	}
 
@@ -200,12 +200,12 @@ void COutputList::OnContextMenu(CWnd* /*pWnd*/, CPoint point)
 
 void COutputList::OnEditCopy()
 {
-	MessageBox(_T("Copy output"));
+	CopyToClipboard();
 }
 
 void COutputList::OnEditClear()
 {
-	MessageBox(_T("Clear output"));
+	ResetContent();
 }
 
 void COutputList::OnViewOutput()
@@ -220,4 +220,53 @@ void COutputList::OnViewOutput()
 		pMainFrame->RecalcLayout();
 
 	}
+}
+
+void COutputList::CopyToClipboard()
+{
+	CString text;
+
+	const int count = GetCount();
+
+	for (int i = 0; i < count; ++i)
+	{
+		CString item;
+		GetText(i, item);
+
+		text += item;
+
+		if (i < count - 1)
+			text += _T("\r\n");
+	}
+
+	if (!OpenClipboard())
+		return;
+
+	EmptyClipboard();
+
+#ifdef UNICODE
+	const SIZE_T size = (text.GetLength() + 1) * sizeof(wchar_t);
+
+	HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, size);
+	if (hMem)
+	{
+		void* pMem = GlobalLock(hMem);
+
+		if (pMem)
+		{
+			memcpy(pMem, text.GetString(), size);
+			GlobalUnlock(hMem);
+
+			SetClipboardData(CF_UNICODETEXT, hMem);
+			hMem = nullptr; // clipboard owns it now
+		}
+
+		if (hMem)
+			GlobalFree(hMem);
+	}
+#else
+	// ANSI version if needed
+#endif
+
+	CloseClipboard();
 }

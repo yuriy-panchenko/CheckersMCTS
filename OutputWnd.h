@@ -6,11 +6,11 @@
 
 class COutputList : public CListBox
 {
-// Construction
+	// Construction
 public:
 	COutputList() noexcept;
 
-// Implementation
+	// Implementation
 public:
 	virtual ~COutputList();
 
@@ -21,11 +21,12 @@ protected:
 	afx_msg void OnViewOutput();
 
 	DECLARE_MESSAGE_MAP()
+	void CopyToClipboard();
 };
 
 class COutputWnd : public CDockablePane
 {
-// Construction
+	// Construction
 public:
 	COutputWnd() noexcept;
 
@@ -35,7 +36,7 @@ public:
 	void RemoveBuildString();
 	void ClearBuild();
 
-// Attributes
+	// Attributes
 protected:
 	CMFCTabCtrl	m_wndTabs;
 
@@ -50,7 +51,7 @@ protected:
 
 	void AdjustHorzScroll(CListBox& wndListBox);
 
-// Implementation
+	// Implementation
 public:
 	virtual ~COutputWnd();
 

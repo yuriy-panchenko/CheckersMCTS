@@ -10,7 +10,18 @@
 class CCheckersDoc : public CDocument
 {
 	using Moves = std::vector<game::Move>;
+	
 	struct Hist { id::zip64 state; game::Move m; };
+
+	struct Sample
+	{
+		game::Color mover;          // needed to assign correct-signed outcome later
+		std::vector<double> board;                  // state.encode_board(), from mover's perspective
+		std::vector<size_t> legal_indices;
+		std::vector<double> target_policy;          // size 896, visit_distribution: N_i / ΣN over root edges, 0 elsewhere
+		double real_value = .0;
+	};
+
 protected: // create from serialization only
 	CCheckersDoc() noexcept;
 	DECLARE_DYNCREATE(CCheckersDoc)
@@ -63,19 +74,24 @@ protected:
 
 private:
 	BOOL IsHuman(game::Color)const;
-	void EndGame(game::Color);
-	void EndGame();
-	void UpdatePicture();
+	void EndGame(std::optional<game::Color>);
+	void UpdatePicture(BOOL doRedraw);
 	BOOL Test4Stale();
 	auto const& GetGame()const { return m_Tree.current_state(); }
 	void TestEndOfGame();
+	Sample MakeSample()const;
+	void TrainOnSamples(std::optional<game::Color>);
 
 	BOOL m_isWhiteHuman, m_isBlackHuman;
 	Moves m_PossibleMoves;
 	std::map<id::zip64, size_t> m_idCount;
 	UINT_PTR m_idTimer;
-	SIZE_T m_uGameCount, m_uMoveCount, m_winWhite, m_winBlack, m_wNoCh, m_bNoCh;
-	double m_wPosibleTotal, m_bPosTotal;
+	SIZE_T m_uGameCount, m_uMoveCount, m_winWhite, m_winBlack;
 	mcts::MCTS m_Tree;
 	NNet m_Net;
+	std::vector<Sample> m_Samples;
+	double m_FirstValue;
+public:
+	afx_msg void OnWhiteHuman();
+	afx_msg void OnUpdateWhiteHuman(CCmdUI* pCmdUI);
 };

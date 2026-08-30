@@ -1,5 +1,6 @@
 #pragma once
 #include <memory>
+#include <random>
 #include "defines.h"
 
 namespace mcts
@@ -38,12 +39,16 @@ namespace mcts
 
 		void debug_dump_root(int top_n)const;
 		auto& current_state()const { return root->state; }
+		Node const& get_root()const { return *root; }
 
+		static std::vector<double> mask_and_softmax(std::vector<double> const& raw_logits, std::vector<size_t> const& legal_indices);
+		void add_root_noise(double alpha = .3, double eps = .25);
+	
 	private:
 		double expand(Node& node, std::vector<game::Move> const& legal_moves);
 		Edge& select_edge(Node& node);
 		double select_and_expand(Node& node);
-		static std::vector<double> mask_and_softmax(std::vector<double> const& raw_logits, std::vector<size_t> const& legal_indices);
+		double gamma_sample(double alpha)const;
 
 	private:
 		std::unique_ptr<Node> root;
