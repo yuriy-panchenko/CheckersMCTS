@@ -52,6 +52,10 @@ BEGIN_MESSAGE_MAP(CCheckersDoc, CDocument)
 END_MESSAGE_MAP()
 
 // CCheckersDoc construction/destruction
+constexpr auto
+section_key{ _T("Settings") },
+white_human{ _T("WhiteIsHuman") },
+black_human{ _T("BlackIsHuman") };
 
 CCheckersDoc::CCheckersDoc() noexcept
 	:m_isWhiteHuman{ FALSE }
@@ -138,6 +142,9 @@ CCheckersDoc::CCheckersDoc() noexcept
 	{
 		::MessageBox(NULL, CA2W{ e.what() }, _T("Error loading nnet!"), MB_OK | MB_ICONERROR);
 	}
+
+	m_isWhiteHuman = theApp.GetProfileInt(section_key, white_human, TRUE);
+	m_isBlackHuman = theApp.GetProfileInt(section_key, black_human, FALSE);
 }
 
 game::Board const& CCheckersDoc::GetBoard() const
@@ -537,6 +544,7 @@ void CCheckersDoc::TrainOnSamples(std::optional<game::Color> winner)
 		m_FirstValue
 	);
 	static_cast<CMainFrame*>(theApp.GetMainWnd())->GetOutputWnd().AddDebugString(str);
+	static_cast<CMainFrame*>(theApp.GetMainWnd())->GetOutputWnd().AddChartData(policy_loss_sum / m_Samples.size());
 
 	m_Samples.clear();
 }
@@ -551,4 +559,12 @@ void CCheckersDoc::OnWhiteHuman()
 void CCheckersDoc::OnUpdateWhiteHuman(CCmdUI* pCmdUI)
 {
 	pCmdUI->SetCheck(m_isWhiteHuman);
+}
+
+void CCheckersDoc::OnCloseDocument()
+{
+	theApp.WriteProfileInt(section_key, white_human, m_isWhiteHuman);
+	theApp.WriteProfileInt(section_key, black_human, m_isBlackHuman);
+
+	CDocument::OnCloseDocument();
 }

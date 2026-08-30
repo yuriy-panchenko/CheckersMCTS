@@ -166,6 +166,10 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
 
 	CMFCToolBar::SetBasicCommands(lstBasicCommands);
 
+	/*m_wndOutput.AddChartData(100.);
+	m_wndOutput.AddChartData(105.);
+	m_wndOutput.AddChartData(100.);*/
+
 	return 0;
 }
 

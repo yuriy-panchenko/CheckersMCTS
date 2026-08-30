@@ -12,6 +12,8 @@
 static char THIS_FILE[] = __FILE__;
 #endif
 
+#define CHART_DATA_FILENAME	_T("chart.bin")
+
 /////////////////////////////////////////////////////////////////////////////
 // COutputBar
 
@@ -19,7 +21,14 @@ COutputWnd::COutputWnd() noexcept
 {}
 
 COutputWnd::~COutputWnd()
-{}
+{
+	if (m_wndChart.HasData())
+	{
+		std::ofstream s{ CHART_DATA_FILENAME, std::ios::binary };
+		if (s)
+			m_wndChart.Save(s);
+	}
+}
 
 BEGIN_MESSAGE_MAP(COutputWnd, CDockablePane)
 	ON_WM_CREATE()
@@ -45,7 +54,8 @@ int COutputWnd::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	const DWORD dwStyle = LBS_NOINTEGRALHEIGHT | WS_CHILD | WS_VISIBLE | WS_HSCROLL | WS_VSCROLL;
 
 	if (!m_wndOutputBuild.Create(dwStyle, rectDummy, &m_wndTabs, 2)
-		||!m_wndOutputDebug.Create(dwStyle, rectDummy, &m_wndTabs, 3)
+		|| !m_wndOutputDebug.Create(dwStyle, rectDummy, &m_wndTabs, 3)
+		|| !m_wndChart.Create(NULL, NULL, WS_CHILD | WS_VISIBLE, CRect{}, this, ID_CHART_WND)
 		/*
 		||!m_wndOutputFind.Create(dwStyle, rectDummy, &m_wndTabs, 4)*/)
 	{
@@ -62,10 +72,12 @@ int COutputWnd::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	bNameValid = strTabName.LoadString(IDS_BUILD_TAB);
 	ASSERT(bNameValid);
 	m_wndTabs.AddTab(&m_wndOutputBuild, strTabName, (UINT)0);
-	
+
 	bNameValid = strTabName.LoadString(IDS_DEBUG_TAB);
 	ASSERT(bNameValid);
 	m_wndTabs.AddTab(&m_wndOutputDebug, strTabName, (UINT)1);
+
+	m_wndTabs.AddTab(&m_wndChart, _T("Chart"), 2u);
 	/*
 	bNameValid = strTabName.LoadString(IDS_FIND_TAB);
 	ASSERT(bNameValid);
@@ -75,7 +87,10 @@ int COutputWnd::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	FillBuildWindow();
 	//FillDebugWindow();
 	//FillFindWindow();
-
+	std::ifstream s{ CHART_DATA_FILENAME, std::ios::binary };
+	if (s)
+		m_wndChart.Load(s, std::filesystem::file_size(CHART_DATA_FILENAME)/sizeof(double));
+	m_wndChart.SetFocus();
 	return 0;
 }
 
@@ -131,6 +146,7 @@ void COutputWnd::UpdateFonts()
 {
 	m_wndOutputBuild.SetFont(&afxGlobalData.fontRegular);
 	m_wndOutputDebug.SetFont(&afxGlobalData.fontRegular);
+	m_wndChart.SetFont(&afxGlobalData.fontRegular);
 	//m_wndOutputFind.SetFont(&afxGlobalData.fontRegular);
 }
 
@@ -142,6 +158,11 @@ void COutputWnd::AddBuildString(CString const& text)
 void COutputWnd::AddDebugString(CString const& text)
 {
 	m_wndOutputDebug.SetTopIndex(m_wndOutputDebug.AddString(text));
+}
+
+void COutputWnd::AddChartData(double db)
+{
+	m_wndChart.Add(db);
 }
 
 void COutputWnd::RemoveBuildString()

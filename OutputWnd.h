@@ -3,7 +3,7 @@
 
 /////////////////////////////////////////////////////////////////////////////
 // COutputList window
-
+#include "CChatWnd.h"
 class COutputList : public CListBox
 {
 	// Construction
@@ -33,6 +33,7 @@ public:
 	void UpdateFonts();
 	void AddBuildString(CString const&);
 	void AddDebugString(CString const&);
+	void AddChartData(double);
 	void RemoveBuildString();
 	void ClearBuild();
 
@@ -42,6 +43,7 @@ protected:
 
 	COutputList m_wndOutputBuild;
 	COutputList m_wndOutputDebug;
+	CChatWnd m_wndChart;
 	//COutputList m_wndOutputFind;
 
 protected:

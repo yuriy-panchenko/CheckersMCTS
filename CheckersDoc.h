@@ -97,4 +97,5 @@ private:
 public:
 	afx_msg void OnWhiteHuman();
 	afx_msg void OnUpdateWhiteHuman(CCmdUI* pCmdUI);
+	virtual void OnCloseDocument();
 };
