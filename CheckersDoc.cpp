@@ -25,6 +25,7 @@
 
 #define TIMER_ELLAPLE	(100)
 #define LEARNING_RATE	(.01)
+#define NNET_FILENAME	_T("net.bin")
 
 using namespace game;
 using namespace mcts;
@@ -124,6 +125,14 @@ CCheckersDoc::CCheckersDoc() noexcept
 #endif // DEBUG
 
 	m_Net.init();
+
+	std::ifstream s{ NNET_FILENAME, std::ios::binary };
+	if (s)
+		try { s >> m_Net; }
+	catch (const std::exception& e)
+	{
+		::MessageBox(NULL, CA2W{ e.what() }, _T("Error loading nnet!"), MB_OK | MB_ICONERROR);
+	}
 }
 
 game::Board const& CCheckersDoc::GetBoard() const
@@ -270,6 +279,13 @@ void CCheckersDoc::EndGame(std::optional<Color> winner)
 			sam.real_value = sam.mover == *winner ? 1. : -1.;
 
 	TrainOnSamples(winner);
+	std::ofstream s{ NNET_FILENAME, std::ios::binary };
+	if (s)
+		try { s << m_Net; }
+	catch (const std::exception& e)
+	{
+		::MessageBox(NULL, CA2W{ e.what() }, _T("Error saving nnet!"), MB_OK | MB_ICONERROR);
+	}
 	OnNewDocument();
 }
 
@@ -419,7 +435,7 @@ void CCheckersDoc::AutoMoveProc(HWND hWnd, UINT uMsg, UINT_PTR idEvent, DWORD dw
 void CCheckersDoc::OnUpdateIdsIndicatorWhite(CCmdUI* pCmdUI)
 {
 	CString str;
-	str.Format(_T("White %d"), GetBoard().GetPieces(Color::White).size());
+	str.Format(_T("W %d"), GetBoard().GetPieces(Color::White).size());
 	pCmdUI->SetText(str);
 	pCmdUI->Enable(GetGame().WhoMakesTurn() == Color::White);
 }
@@ -428,14 +444,14 @@ void CCheckersDoc::OnUpdateIdsIndicatorWhite(CCmdUI* pCmdUI)
 void CCheckersDoc::OnUpdateIdsIndicatorPossibleMoves(CCmdUI* pCmdUI)
 {
 	CString str;
-	str.Format(_T("Pos: %d"), m_PossibleMoves.size());
+	str.Format(_T("Ava %d"), m_PossibleMoves.size());
 	pCmdUI->SetText(str);
 }
 
 void CCheckersDoc::OnUpdateIdsIndicatorBlack(CCmdUI* pCmdUI)
 {
 	CString str;
-	str.Format(_T("Black %d"), GetBoard().GetPieces(Color::Black).size());
+	str.Format(_T("B %d"), GetBoard().GetPieces(Color::Black).size());
 	pCmdUI->SetText(str);
 	pCmdUI->Enable(GetGame().WhoMakesTurn() == Color::Black);
 }
@@ -443,14 +459,14 @@ void CCheckersDoc::OnUpdateIdsIndicatorBlack(CCmdUI* pCmdUI)
 void CCheckersDoc::OnUpdateIdsIndicatorGameCount(CCmdUI* pCmdUI)
 {
 	CString str;
-	str.Format(_T("G: %I64u"), m_uGameCount);
+	str.Format(_T("Adj: %I64u"), m_Net.get_adjusts());
 	pCmdUI->SetText(str);
 }
 
 void CCheckersDoc::OnUpdateIdsIndicatorMoveCount(CCmdUI* pCmdUI)
 {
 	CString str;
-	str.Format(_T("M: %I64u"), m_uMoveCount);
+	str.Format(_T("Lrn: %I64u"), m_Net.get_learns());
 	pCmdUI->SetText(str);
 }
 
