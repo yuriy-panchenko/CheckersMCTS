@@ -25,6 +25,7 @@
 
 #define TIMER_ELLAPLE	(100)
 #define LEARNING_RATE	(.001)
+#define STALE_COUNT		(3ull)
 #define NNET_FILENAME	_T("net.bin")
 
 using namespace game;
@@ -492,7 +493,7 @@ void CCheckersDoc::OnUpdateStartPause(CCmdUI* pCmdUI)
 
 BOOL CCheckersDoc::Test4Stale()
 {
-	return ++m_idCount[GetBoard().GetZipID()] >= 5ull;
+	return ++m_idCount[GetBoard().GetZipID()] >= STALE_COUNT;
 }
 
 void CCheckersDoc::TrainOnSamples(std::optional<game::Color> winner)
