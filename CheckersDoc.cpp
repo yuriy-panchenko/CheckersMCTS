@@ -49,6 +49,8 @@ BEGIN_MESSAGE_MAP(CCheckersDoc, CDocument)
 	ON_UPDATE_COMMAND_UI(IDS_INDICATOR_LEARNS, &CCheckersDoc::OnUpdateIdsIndicatorLearns)
 
 
+	ON_COMMAND(ID_START_LEARNING_THREAD, &CCheckersDoc::OnStartLearningThread)
+	ON_UPDATE_COMMAND_UI(ID_START_LEARNING_THREAD, &CCheckersDoc::OnUpdateStartLearningThread)
 END_MESSAGE_MAP()
 
 // CCheckersDoc construction/destruction
@@ -66,6 +68,7 @@ CCheckersDoc::CCheckersDoc() noexcept
 	, m_winWhite{}
 	, m_winBlack{}
 	, m_Tree{ Checkers{ Color::White }, m_Net }
+	, m_pLearnTh{ nullptr }
 {
 	class ms_timer
 	{
@@ -242,7 +245,7 @@ void CCheckersDoc::AutoMove()
 	UpdatePicture(FALSE);
 }
 
-CCheckersDoc::Sample CCheckersDoc::MakeSample()const
+Sample CCheckersDoc::MakeSample()const
 {
 	// NOW build target_policy from root's edges (this is separate from
 		// each Node's own `sample` used internally at expand-time)
@@ -280,8 +283,6 @@ void CCheckersDoc::EndGame(std::optional<Color> winner)
 		str.Format(_T("Game over! %s is a winner."), winner == Color::White ? _T("WHITE") : _T("BLACK"));
 		AfxMessageBox(str);
 	}
-
-	double policy_loss_sum{}, value_loss_sum{};
 
 	if (winner)
 		for (auto& sam : m_Samples)
@@ -548,6 +549,13 @@ void CCheckersDoc::TrainOnSamples(std::optional<game::Color> winner)
 	m_Samples.clear();
 }
 
+void CCheckersDoc::KillLearner()
+{
+	m_pLearnTh->PostThreadMessage(WM_QUIT, 0, 0);
+	::WaitForSingleObject(*m_pLearnTh, INFINITE);
+	m_pLearnTh = nullptr;
+}
+
 void CCheckersDoc::OnWhiteHuman()
 {
 	m_isWhiteHuman = !m_isWhiteHuman;
@@ -565,5 +573,24 @@ void CCheckersDoc::OnCloseDocument()
 	theApp.WriteProfileInt(section_key, white_human, m_isWhiteHuman);
 	theApp.WriteProfileInt(section_key, black_human, m_isBlackHuman);
 
+	if (m_pLearnTh)
+		KillLearner();
+
 	CDocument::OnCloseDocument();
+}
+
+void CCheckersDoc::OnStartLearningThread()
+{
+	if (m_pLearnTh)
+		KillLearner();
+	else
+	{
+		m_pLearnTh = static_cast<CLearningThread*>(::AfxBeginThread(RUNTIME_CLASS(CLearningThread)));
+	}
+}
+
+void CCheckersDoc::OnUpdateStartLearningThread(CCmdUI* pCmdUI)
+{
+	pCmdUI->SetCheck(m_pLearnTh != nullptr);
+	pCmdUI->Enable(IsHuman(Color::White) || IsHuman(Color::Black));
 }

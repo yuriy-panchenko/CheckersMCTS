@@ -146,3 +146,5 @@ namespace game
 		//void Do(Jump const&);
 	};
 }
+
+using Moves = std::vector<game::Move>;

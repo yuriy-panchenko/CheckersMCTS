@@ -6,21 +6,11 @@
 #pragma once
 #include "defines.h"
 #include "mcts.h"
+#include "CLearningThread.h"
 
 class CCheckersDoc : public CDocument
 {
-	using Moves = std::vector<game::Move>;
-	
 	struct Hist { id::zip64 state; game::Move m; };
-
-	struct Sample
-	{
-		game::Color mover;          // needed to assign correct-signed outcome later
-		std::vector<double> board;                  // state.encode_board(), from mover's perspective
-		std::vector<size_t> legal_indices;
-		std::vector<double> target_policy;          // size 896, visit_distribution: N_i / ΣN over root edges, 0 elsewhere
-		double real_value = .0;
-	};
 
 protected: // create from serialization only
 	CCheckersDoc() noexcept;
@@ -42,6 +32,7 @@ public:
 public:
 	virtual BOOL OnNewDocument();
 	virtual void Serialize(CArchive& ar);
+	virtual void OnCloseDocument();
 #ifdef SHARED_HANDLERS
 	virtual void InitializeSearchContent();
 	virtual void OnDrawThumbnail(CDC& dc, LPRECT lprcBounds);
@@ -68,6 +59,10 @@ protected:
 	afx_msg void OnUpdateStartPause(CCmdUI* pCmdUI);
 	afx_msg void OnUpdateIdsIndicatorAdjusted(CCmdUI* pCmdUI);
 	afx_msg void OnUpdateIdsIndicatorLearns(CCmdUI* pCmdUI);
+	afx_msg void OnWhiteHuman();
+	afx_msg void OnUpdateWhiteHuman(CCmdUI* pCmdUI);
+	afx_msg void OnStartLearningThread();
+	afx_msg void OnUpdateStartLearningThread(CCmdUI* pCmdUI);
 	DECLARE_MESSAGE_MAP()
 
 #ifdef SHARED_HANDLERS
@@ -83,6 +78,7 @@ private:
 	auto const& GetGame()const { return m_Tree.current_state(); }
 	Sample MakeSample()const;
 	void TrainOnSamples(std::optional<game::Color>);
+	void KillLearner();
 
 	BOOL m_isWhiteHuman, m_isBlackHuman;
 	Moves m_PossibleMoves;
@@ -93,8 +89,5 @@ private:
 	NNet m_Net;
 	std::vector<Sample> m_Samples;
 	double m_FirstValue;
-public:
-	afx_msg void OnWhiteHuman();
-	afx_msg void OnUpdateWhiteHuman(CCmdUI* pCmdUI);
-	virtual void OnCloseDocument();
+	CLearningThread* m_pLearnTh;
 };
