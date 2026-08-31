@@ -36,6 +36,7 @@ public:
 	void AddChartData(double);
 	void RemoveBuildString();
 	void ClearBuild();
+	void SaveChartData();
 
 	// Attributes
 protected:

@@ -216,22 +216,20 @@ void CCheckersDoc::MakeMove(game::Move const& m)
 	}
 	m_PossibleMoves = GetGame().GetAvailableMoves();
 
-	TestEndOfGame();
-}
-
-void CCheckersDoc::TestEndOfGame()
-{
+	//	TestEndOfGame
 	if (!m_PossibleMoves.empty() && Test4Stale())
-		EndGame(!GetGame().WhoMakesTurn());
+		//EndGame(!GetGame().WhoMakesTurn());
+		EndGame({});
 	else if (m_PossibleMoves.empty())
 		EndGame(!GetGame().WhoMakesTurn());
 	else if (!IsHuman(GetGame().WhoMakesTurn()))
 		m_idTimer = ::SetTimer(NULL, 0, TIMER_ELLAPLE, AutoMoveProc);
 }
+
 void CCheckersDoc::AutoMove()
 {
 	//MakeMove(m_PossibleMoves[rand() % m_PossibleMoves.size()]);
-	::CWaitCursor _;
+	//::CWaitCursor _;
 	for (size_t i = 0; i < SIMULATION_COUNT; ++i)
 		m_Tree.run_simulation();
 
@@ -287,7 +285,7 @@ void CCheckersDoc::EndGame(std::optional<Color> winner)
 
 	if (winner)
 		for (auto& sam : m_Samples)
-			sam.real_value = sam.mover == *winner ? 1. : -1.;
+			sam.real_value = winner ? sam.mover == *winner ? 1. : -1. : .0;
 
 	TrainOnSamples(winner);
 	std::ofstream s{ NNET_FILENAME, std::ios::binary };
@@ -545,6 +543,7 @@ void CCheckersDoc::TrainOnSamples(std::optional<game::Color> winner)
 	);
 	static_cast<CMainFrame*>(theApp.GetMainWnd())->GetOutputWnd().AddDebugString(str);
 	static_cast<CMainFrame*>(theApp.GetMainWnd())->GetOutputWnd().AddChartData(policy_loss_sum / m_Samples.size());
+	static_cast<CMainFrame*>(theApp.GetMainWnd())->GetOutputWnd().SaveChartData();
 
 	m_Samples.clear();
 }

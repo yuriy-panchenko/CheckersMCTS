@@ -22,12 +22,6 @@ COutputWnd::COutputWnd() noexcept
 
 COutputWnd::~COutputWnd()
 {
-	if (m_wndChart.HasData())
-	{
-		std::ofstream s{ CHART_DATA_FILENAME, std::ios::binary };
-		if (s)
-			m_wndChart.Save(s);
-	}
 }
 
 BEGIN_MESSAGE_MAP(COutputWnd, CDockablePane)
@@ -177,6 +171,16 @@ void COutputWnd::RemoveBuildString()
 void COutputWnd::ClearBuild()
 {
 	m_wndOutputBuild.ResetContent();
+}
+
+void COutputWnd::SaveChartData()
+{
+	if (m_wndChart.HasData())
+	{
+		std::ofstream s{ CHART_DATA_FILENAME, std::ios::binary };
+		if (s)
+			m_wndChart.Save(s);
+	}
 }
 
 /////////////////////////////////////////////////////////////////////////////

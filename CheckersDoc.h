@@ -81,7 +81,6 @@ private:
 	void UpdatePicture(BOOL doRedraw);
 	BOOL Test4Stale();
 	auto const& GetGame()const { return m_Tree.current_state(); }
-	void TestEndOfGame();
 	Sample MakeSample()const;
 	void TrainOnSamples(std::optional<game::Color>);
 

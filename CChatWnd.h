@@ -24,7 +24,9 @@ private:
 	void Draw(CDC& dc, CSize const canv);
 
 	std::vector<double> m_Data;
-	CPen m_penLine;
+	COLORREF m_colMajor, m_colMinor;
+	CPen m_penLine, m_penScaleMajor,m_penScaleMinor;
+	CFont m_fontMajor, m_fontMinor;
 	double m_Min, m_Max;
 	BOOL m_bInitial;
 };

@@ -57,6 +57,9 @@
     <ClInclude Include="CChatWnd.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="CLearningThread.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Checkers.cpp">
@@ -87,6 +90,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="CChatWnd.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="CLearningThread.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
