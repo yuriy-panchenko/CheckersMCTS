@@ -5,7 +5,7 @@
 #include "Checkers.h"
 #include "CChatWnd.h"
 
-
+#define MA_WINDOW	(20)
 // CChatWnd
 
 IMPLEMENT_DYNAMIC(CChatWnd, CWnd)
@@ -16,6 +16,7 @@ CChatWnd::CChatWnd()
 	, m_colMinor{ RGB(125, 135, 150) }
 	, m_penScaleMajor{ PS_SOLID, 1, RGB(110, 110, 110) }
 	, m_penScaleMinor{ PS_DOT, 1, RGB(80, 80, 80) }
+	, m_penMA{ PS_SOLID, 3, RGB(20,20,180) }
 	, m_Min{}
 	, m_Max{}
 	, m_bInitial{ TRUE }
@@ -241,4 +242,18 @@ void CChatWnd::Draw(CDC& dc, CSize const canv)
 
 	for (auto iter{ std::next(m_Data.begin()) }; iter != m_Data.end(); iter++)
 		dc.LineTo(to_scr((int)std::distance(m_Data.begin(), iter), *iter));
+
+	dc.SelectObject(m_penMA);
+	for (int i = 0; i < m_Data.size(); ++i)
+	{
+		double sum{};
+		for (auto u = (std::max)(0, i - MA_WINDOW); u <= i; ++u)
+			sum += m_Data[u];
+		sum /= MA_WINDOW;
+
+		auto const pnt{ to_scr(i, sum) };
+		if (i)
+			dc.LineTo(pnt);
+		else dc.MoveTo(pnt);
+	}
 }

@@ -25,7 +25,7 @@ private:
 
 	std::vector<double> m_Data;
 	COLORREF m_colMajor, m_colMinor;
-	CPen m_penLine, m_penScaleMajor,m_penScaleMinor;
+	CPen m_penLine, m_penScaleMajor,m_penScaleMinor,m_penMA;
 	CFont m_fontMajor, m_fontMinor;
 	double m_Min, m_Max;
 	BOOL m_bInitial;
