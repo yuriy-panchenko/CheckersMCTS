@@ -119,7 +119,7 @@ void CLearningThread::EndGame(std::optional<game::Color> winner)
 	{
 		::MessageBox(NULL, CA2W{ e.what() }, _T("Error saving nnet!"), MB_OK | MB_ICONERROR);
 	}
-	PostThreadMessage(WM_NEW_GAME,0,0);
+	PostThreadMessage(WM_NEW_GAME, 0, 0);
 }
 
 void CLearningThread::OnNextMove(WPARAM, LPARAM)
@@ -165,10 +165,15 @@ void CLearningThread::TrainOnSamples(std::optional<game::Color> winner)
 		for (auto idx : s.legal_indices)
 			dL_policy[idx] = pihat[idx] - s.target_policy[idx];
 
-		m_Net.learn(dL_policy, s.real_value);
+		m_Net.learn(s.board, dL_policy, s.real_value);
 	}
 
 	m_Net.adjust(LEARNING_RATE);
 
 	//policy_loss_sum / m_Samples.size()
+}
+
+NNet::out_pair CLearningThread::F1(std::vector<double> const& inp)
+{
+	return m_Net.think(inp);
 }

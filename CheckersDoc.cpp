@@ -526,7 +526,7 @@ void CCheckersDoc::TrainOnSamples(std::optional<game::Color> winner)
 		for (auto idx : s.legal_indices)
 			dL_policy[idx] = pihat[idx] - s.target_policy[idx];
 
-		m_Net.learn(dL_policy, s.real_value);
+		m_Net.learn(s.board, dL_policy, s.real_value);
 	}
 
 	//m_Net.adjust(LEARNING_RATE, m_Samples.size());
@@ -554,6 +554,12 @@ void CCheckersDoc::KillLearner()
 	m_pLearnTh->PostThreadMessage(WM_QUIT, 0, 0);
 	::WaitForSingleObject(*m_pLearnTh, INFINITE);
 	m_pLearnTh = nullptr;
+}
+
+NNet::out_pair CCheckersDoc::F1(std::vector<double> const& inp)
+{
+	m_Net.think(inp);
+	return m_Net.get_out();
 }
 
 void CCheckersDoc::OnWhiteHuman()
