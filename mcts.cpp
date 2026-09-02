@@ -4,16 +4,17 @@
 
 namespace mcts
 {
-	MCTS::MCTS(game::Checkers const& initial_state, chk::net& _net, double _c_puct)
+	MCTS::MCTS(game::Checkers const& initial_state, callback&& cb, double _c_puct)
 		:root{ std::make_unique<Node>(initial_state) }
-		, pNet{ &_net }
+		//, pNet{ &_net }
+		, m_Callback{ std::move(cb) }
 		, c_puct{ _c_puct }
 	{}
 
 	MCTS& MCTS::operator=(MCTS&& oth)
 	{
 		root = std::move(oth.root);
-		pNet = oth.pNet;
+		m_Callback = std::move(oth.m_Callback);
 		c_puct = oth.c_puct;
 		return *this;
 	}
@@ -86,13 +87,16 @@ namespace mcts
 			}
 		}
 
-		pNet->think(node.state.encode_board());
-		auto const priors{ mask_and_softmax(pNet->policy_logits(), legal_indices) };
+		//pNet->think(node.state.encode_board());
+		//auto const priors{ mask_and_softmax(pNet->policy_logits(), legal_indices) };
+		auto const out{ m_Callback(node.state.encode_board()) };
+		auto const priors{ mask_and_softmax(out.first, legal_indices) };
 
 		for (auto& e : node.edges)
 			e.PriorProb = priors[e.action_index];
 
-		return pNet->value();
+		//return pNet->value();
+		return out.second;
 	}
 
 	Edge& MCTS::select_edge(Node& node)

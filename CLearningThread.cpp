@@ -23,7 +23,7 @@ constexpr UINT WM_NEW_GAME{ WM_APP + 0x0002 };
 IMPLEMENT_DYNCREATE(CLearningThread, CWinThread)
 
 CLearningThread::CLearningThread()
-	:m_Tree{ Checkers{ Color::White }, m_Net }
+	:m_Tree{ Checkers{ Color::White }, { [this](auto const& inp) {return F1(inp); }} }
 {}
 
 CLearningThread::~CLearningThread()
@@ -135,7 +135,7 @@ void CLearningThread::OnNextMove(WPARAM, LPARAM)
 
 void CLearningThread::OnNewGame(WPARAM, LPARAM)
 {
-	m_Tree = MCTS{ { Color::Black }, m_Net };
+	m_Tree = MCTS{ { Color::Black },std::function<NNet::out_pair(MCTS::vdb const&)>{ [this](auto const& inp) {return F1(inp); }} };
 	m_Samples.clear();
 	m_idCount.clear();
 	MakeMove({});

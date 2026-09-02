@@ -31,6 +31,7 @@ private:
 	Sample MakeSample()const;
 	void EndGame(std::optional<game::Color> winner);
 	void TrainOnSamples(std::optional<game::Color> winner);
+	NNet::out_pair F1(std::vector<double> const&);
 
 private:
 	Moves m_PossibleMoves;

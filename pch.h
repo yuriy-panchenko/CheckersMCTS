@@ -16,9 +16,15 @@
 #include <filesystem>
 //#include "D:\Simon projects\NeuralNetworks\nnet.h"
 //#include "D:\Simon projects\NeuralNetworks\NNetProxy.h"
-#include "D:\Simon projects\NeuralNetworks\CheckersNet.h"
 
-//using NNet = nnet::net;
+#define FAST_NET
+
+#ifdef FAST_NET
+#include "D:\Simon projects\NeuralNetworks\CheckersFast.h"
+using NNet = chkf::net;
+#else
+#include "D:\Simon projects\NeuralNetworks\CheckersNet.h"
 using NNet = chk::net;
+#endif
 
 #endif //PCH_H

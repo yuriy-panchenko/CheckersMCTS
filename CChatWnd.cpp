@@ -247,9 +247,11 @@ void CChatWnd::Draw(CDC& dc, CSize const canv)
 	for (int i = 0; i < m_Data.size(); ++i)
 	{
 		double sum{};
-		for (auto u = (std::max)(0, i - MA_WINDOW); u <= i; ++u)
+		auto const from{ (std::max)(0, i - MA_WINDOW) };
+		auto u{ from };
+		for (; u <= i; ++u)
 			sum += m_Data[u];
-		sum /= MA_WINDOW;
+		sum /= u - from;
 
 		auto const pnt{ to_scr(i, sum) };
 		if (i)

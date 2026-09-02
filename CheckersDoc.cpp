@@ -67,8 +67,8 @@ CCheckersDoc::CCheckersDoc() noexcept
 	, m_uMoveCount{}
 	, m_winWhite{}
 	, m_winBlack{}
-	, m_Tree{ Checkers{ Color::White }, m_Net }
-	, m_pLearnTh{ nullptr }
+, m_Tree{ Checkers{ Color::White }, { [this](auto const& inp) {return F1(inp); }} }
+, m_pLearnTh{ nullptr }
 {
 	class ms_timer
 	{
@@ -326,7 +326,7 @@ BOOL CCheckersDoc::OnNewDocument()
 	m_uMoveCount = 0;
 	m_idCount.clear();
 
-	m_Tree = MCTS{ { Color::Black }, m_Net };
+	m_Tree = MCTS{ { Color::Black }, { [this](auto const& inp) {return F1(inp); }} };
 	MakeMove({});
 
 	return TRUE;

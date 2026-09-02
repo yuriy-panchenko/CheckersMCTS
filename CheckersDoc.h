@@ -79,6 +79,7 @@ private:
 	Sample MakeSample()const;
 	void TrainOnSamples(std::optional<game::Color>);
 	void KillLearner();
+	NNet::out_pair F1(std::vector<double> const&);
 
 	BOOL m_isWhiteHuman, m_isBlackHuman;
 	Moves m_PossibleMoves;
