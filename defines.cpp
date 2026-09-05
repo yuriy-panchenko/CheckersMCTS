@@ -280,7 +280,7 @@ namespace game
 
 	std::vector<double> Board::encode_board(bool isWhite)const
 	{
-		std::vector<double> ret(128, .0);
+		std::vector ret(128, .0);
 		auto iter{ ret.begin() };
 
 		auto write_square = [&](size_t i)

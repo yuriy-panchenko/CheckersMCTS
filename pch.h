@@ -14,6 +14,7 @@
 #include <stack>
 #include <map>
 #include <filesystem>
+#include <unordered_set>
 //#include "D:\Simon projects\NeuralNetworks\nnet.h"
 //#include "D:\Simon projects\NeuralNetworks\NNetProxy.h"
 

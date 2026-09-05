@@ -98,7 +98,7 @@ Sample CLearningThread::MakeSample() const
 
 	rec.legal_indices.reserve(root.edges.size());
 	for (auto const& e : root.edges)
-		rec.legal_indices.push_back((size_t)e.action_index); /* same indices as root->edges' action_index list */
+		rec.legal_indices.insert((size_t)e.action_index); /* same indices as root->edges' action_index list */
 
 	rec.board = root.state.encode_board();
 	return rec;

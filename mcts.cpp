@@ -7,14 +7,14 @@ namespace mcts
 	MCTS::MCTS(game::Checkers const& initial_state, callback&& cb, double _c_puct)
 		:root{ std::make_unique<Node>(initial_state) }
 		//, pNet{ &_net }
-		, m_Callback{ std::move(cb) }
+		, m_clbThink{ std::move(cb) }
 		, c_puct{ _c_puct }
 	{}
 
 	MCTS& MCTS::operator=(MCTS&& oth)
 	{
 		root = std::move(oth.root);
-		m_Callback = std::move(oth.m_Callback);
+		m_clbThink = std::move(oth.m_clbThink);
 		c_puct = oth.c_puct;
 		return *this;
 	}
@@ -71,31 +71,26 @@ namespace mcts
 
 	double MCTS::expand(Node& node, std::vector<game::Move> const& legal_moves)
 	{
-		node.expanded = true;
+		//node.expanded = true;
 
-		std::vector<size_t> legal_indices;
+		std::unordered_set<size_t> legal_indices;
+		//std::vector<size_t> legal_indices;
 		node.edges.reserve(legal_moves.size());
 
 		for (auto const& move : legal_moves)
 		{
 			size_t const idx{ move.front().to_policy_index(node.state.IsWhiteTurn()) };
-
-			if (std::find(legal_indices.begin(), legal_indices.end(), idx) == legal_indices.end())
-			{
-				legal_indices.push_back(idx);
+			auto res{ legal_indices.insert(idx) };
+			if (res.second)
 				node.edges.push_back(Edge{ int(idx), move.front(), .0 });
-			}
 		}
 
-		//pNet->think(node.state.encode_board());
-		//auto const priors{ mask_and_softmax(pNet->policy_logits(), legal_indices) };
-		auto const out{ m_Callback(node.state.encode_board()) };
+		auto const out{ m_clbThink(node.state.encode_board()) };
 		auto const priors{ mask_and_softmax(out.first, legal_indices) };
 
 		for (auto& e : node.edges)
 			e.PriorProb = priors[e.action_index];
 
-		//return pNet->value();
 		return out.second;
 	}
 
@@ -114,7 +109,7 @@ namespace mcts
 		for (auto& e : node.edges)
 		{
 			double const U{ c_puct * e.PriorProb * sqrt_parent / (1 + e.Visits) };
-			double const score{ e.Mean + U };
+			double const score{ e.Mean() + U };
 			if (score > best_score)
 			{
 				best_score = score;
@@ -126,17 +121,17 @@ namespace mcts
 
 	double MCTS::select_and_expand(Node& node)
 	{
-		if (node.terminal)
-			return node.terminal_value;
+		if (node.terminal_val.has_value())
+			return *node.terminal_val;
 
-		if (!node.expanded)
+		if (node.edges.empty())
 		{
 			auto const legal_moves{ node.state.GetAvailableMoves() };
 			if (legal_moves.empty())
 			{
-				node.terminal = true;
-				node.terminal_value = -1.0;   // no moves => the mover here loses
-				return node.terminal_value;
+				//node.terminal = true;
+				node.terminal_val = -1.0;   // no moves => the mover here loses
+				return *node.terminal_val;
 			}
 			return expand(node, legal_moves);
 		}
@@ -150,7 +145,6 @@ namespace mcts
 		}
 
 		double value{ select_and_expand(*best.child) };
-
 		// Flip perspective only if the mover actually changed (i.e. this
 		// wasn't a mid-chain jump where the same player continues).
 		if (best.child->state.WhoMakesTurn() != node.state.WhoMakesTurn())
@@ -158,7 +152,6 @@ namespace mcts
 
 		++best.Visits;
 		best.BackedUp += value;
-		best.Mean = best.BackedUp / best.Visits;
 
 		return value;
 	}
@@ -169,7 +162,7 @@ namespace mcts
 		return std::gamma_distribution<double>(alpha, 1.0)(rng);
 	}
 
-	std::vector<double> MCTS::mask_and_softmax(std::vector<double> const& raw_logits, std::vector<size_t> const& legal_indices)
+	std::vector<double> MCTS::mask_and_softmax(std::vector<double> const& raw_logits, std::unordered_set<size_t> const& legal_indices)
 	{
 		std::vector probs(raw_logits.size(), .0);
 
@@ -215,7 +208,7 @@ namespace mcts
 		for (auto const* e : sorted)
 		{
 			TRACE(_T("  idx=%d  N=%-5d  P=%.4f  Q=%+.4f  from=(%d,%d) to=(%d,%d)\n"),
-				e->action_index, e->Visits, e->PriorProb, e->Mean,
+				e->action_index, e->Visits, e->PriorProb, e->Mean(),
 				int(e->j.From().row), int(e->j.From().col),
 				int(e->j.To().row), int(e->j.To().col));
 

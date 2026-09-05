@@ -1,6 +1,7 @@
 #pragma once
 #include <memory>
 #include <functional>
+#include <unordered_set>
 #include <random>
 #include "defines.h"
 
@@ -15,16 +16,14 @@ namespace mcts
 		double PriorProb;              // prior probability, from mask_and_softmax at parent expansion
 		int    Visits = 0;           // visit count
 		double BackedUp = 0.0;         // total backed-up value
-		double Mean = 0.0;         // mean value = W / N (0 if N == 0)
 		std::unique_ptr<Node> child;   // null until this edge is first traversed (lazy expansion)
+		double Mean()const { return Visits ? BackedUp / Visits : .0; };         // mean value = W / N (0 if N == 0)
 	};
 
 	struct Node
 	{
 		game::Checkers state;
-		bool expanded = false;
-		bool terminal = false;
-		double terminal_value = 0.0;   // only meaningful if terminal
+		std::optional<double> terminal_val;
 		std::vector<Edge> edges;       // populated once, at expansion time
 	};
 
@@ -46,7 +45,7 @@ namespace mcts
 		auto& current_state()const { return root->state; }
 		Node const& get_root()const { return *root; }
 
-		static std::vector<double> mask_and_softmax(std::vector<double> const& raw_logits, std::vector<size_t> const& legal_indices);
+		static std::vector<double> mask_and_softmax(std::vector<double> const& raw_logits, std::unordered_set<size_t> const& legal_indices);
 		void add_root_noise(double alpha = .3, double eps = .25);
 
 	private:
@@ -58,7 +57,7 @@ namespace mcts
 	private:
 		std::unique_ptr<Node> root;
 		//chk::net* pNet;
-		callback m_Callback;
+		callback m_clbThink;
 		double c_puct;
 	};
 }

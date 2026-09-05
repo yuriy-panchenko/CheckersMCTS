@@ -212,7 +212,7 @@ void CCheckersDoc::MakeMove(game::Move const& m)
 		ASSERT(pMain);
 		CString str;
 		str.Format(_T("%I64u. %s | root N=%d | best Prob=%.3f Q=%+.3f"),
-			m_uMoveCount, ToString(m), total_visits, best_edge.PriorProb, best_edge.Mean);
+			m_uMoveCount, ToString(m), total_visits, best_edge.PriorProb, best_edge.Mean());
 
 		pMain->GetOutputWnd().AddBuildString(str);
 		m_Tree.advance_root(m);
@@ -262,7 +262,7 @@ Sample CCheckersDoc::MakeSample()const
 
 	rec.legal_indices.reserve(root.edges.size());
 	for (auto const& e : root.edges)
-		rec.legal_indices.push_back((size_t)e.action_index); /* same indices as root->edges' action_index list */
+		rec.legal_indices.insert((size_t)e.action_index); /* same indices as root->edges' action_index list */
 
 	rec.board = root.state.encode_board();
 	return rec;
