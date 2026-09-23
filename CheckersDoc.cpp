@@ -24,7 +24,7 @@
 #endif
 
 #define TIMER_ELLAPLE	(100)
-#define LEARNING_RATE	(.001)
+#define LEARNING_RATE	(.005)
 #define STALE_COUNT		(3ull)
 #define NNET_FILENAME	_T("net.bin")
 
@@ -558,8 +558,7 @@ void CCheckersDoc::KillLearner()
 
 NNet::out_pair CCheckersDoc::F1(std::vector<double> const& inp)
 {
-	m_Net.think(inp);
-	return m_Net.get_out();
+	return m_Net.think(inp);
 }
 
 void CCheckersDoc::OnWhiteHuman()
