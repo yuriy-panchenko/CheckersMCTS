@@ -24,7 +24,7 @@
 #endif
 
 #define TIMER_ELLAPLE	(100)
-#define LEARNING_RATE	(.005)
+#define LEARNING_RATE	(.002)
 #define STALE_COUNT		(3ull)
 #define NNET_FILENAME	_T("net.bin")
 
