@@ -37,9 +37,11 @@ public:
 	void RemoveBuildString();
 	void ClearBuild();
 	void SaveChartData();
+	void SetSummary(CString const&);
 
 	// Attributes
 protected:
+	CStatic m_wndSummary;
 	CMFCTabCtrl	m_wndTabs;
 
 	COutputList m_wndOutputBuild;

@@ -27,6 +27,7 @@
 #define LEARNING_RATE	(.3)
 #define STALE_COUNT		(3ull)
 #define NNET_FILENAME	_T("net.bin")
+#define STATS_FILENAME	_T("games.csv")
 
 using namespace game;
 using namespace mcts;
@@ -136,6 +137,7 @@ CCheckersDoc::CCheckersDoc() noexcept
 #else
 	::srand((unsigned)::time(nullptr));
 #endif // DEBUG
+	m_Stats.load_csv(STATS_FILENAME);
 
 	m_Net.init();
 
@@ -223,9 +225,9 @@ void CCheckersDoc::MakeMove(game::Move const& m)
 	//	TestEndOfGame
 	if (!m_PossibleMoves.empty() && Test4Stale())
 		//EndGame(!GetGame().WhoMakesTurn());
-		EndGame({});
+		EndGame({},GameStats::Reason::Stale);
 	else if (m_PossibleMoves.empty())
-		EndGame(!GetGame().WhoMakesTurn());
+		EndGame(!GetGame().WhoMakesTurn(), GameStats::Reason::NoMoves);
 	else if (!IsHuman(GetGame().WhoMakesTurn()))
 		m_idTimer = ::SetTimer(NULL, 0, TIMER_ELLAPLE, AutoMoveProc);
 }
@@ -267,7 +269,7 @@ Sample CCheckersDoc::MakeSample()const
 	return rec;
 }
 
-void CCheckersDoc::EndGame(std::optional<Color> winner)
+void CCheckersDoc::EndGame(std::optional<Color> winner, GameStats::Reason why)
 {
 	UpdatePicture(TRUE);
 
@@ -287,7 +289,14 @@ void CCheckersDoc::EndGame(std::optional<Color> winner)
 		for (auto& sam : m_Samples)
 			sam.real_value = winner ? sam.mover == *winner ? 1. : -1. : .0;
 
-	TrainOnSamples(winner);
+	size_t const plies{ m_Samples.size() };
+	auto const [ploss, vloss] = TrainOnSamples(winner);
+
+	GameStats::Record const rec{ m_Stats.games() + 1, winner, why, plies, ploss, vloss };
+	m_Stats.add(rec);
+	GameStats::append_csv(STATS_FILENAME, rec);
+	static_cast<CMainFrame*>(theApp.GetMainWnd())->GetOutputWnd().SetSummary(m_Stats.summary());
+
 	std::ofstream s{ NNET_FILENAME, std::ios::binary };
 	if (s)
 		try { s << m_Net; }
@@ -319,6 +328,7 @@ BOOL CCheckersDoc::OnNewDocument()
 
 	if (m_idTimer && ::KillTimer(NULL, m_idTimer))
 		m_idTimer = 0;
+	static_cast<CMainFrame*>(theApp.GetMainWnd())->GetOutputWnd().SetSummary(m_Stats.summary());
 	static_cast<CMainFrame*>(theApp.GetMainWnd())->GetOutputWnd().ClearBuild();
 
 	++m_uGameCount;
@@ -501,7 +511,7 @@ BOOL CCheckersDoc::Test4Stale()
 	return ++m_idCount[GetBoard().GetZipID()] >= STALE_COUNT;
 }
 
-void CCheckersDoc::TrainOnSamples(std::optional<game::Color> winner)
+std::pair<double, double> CCheckersDoc::TrainOnSamples(std::optional<game::Color> winner)
 {
 	double policy_loss_sum{}, value_loss_sum{};
 	ASSERT(!m_Samples.empty());
@@ -545,7 +555,9 @@ void CCheckersDoc::TrainOnSamples(std::optional<game::Color> winner)
 	static_cast<CMainFrame*>(theApp.GetMainWnd())->GetOutputWnd().AddChartData(policy_loss_sum / m_Samples.size());
 	static_cast<CMainFrame*>(theApp.GetMainWnd())->GetOutputWnd().SaveChartData();
 
+	auto const ret{ std::make_pair(policy_loss_sum / m_Samples.size(), value_loss_sum / m_Samples.size()) };
 	m_Samples.clear();
+	return ret;
 }
 
 void CCheckersDoc::KillLearner()

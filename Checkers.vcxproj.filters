@@ -60,6 +60,9 @@
     <ClInclude Include="CLearningThread.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="GameStats.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Checkers.cpp">

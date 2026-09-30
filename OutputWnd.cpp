@@ -21,8 +21,7 @@ COutputWnd::COutputWnd() noexcept
 {}
 
 COutputWnd::~COutputWnd()
-{
-}
+{}
 
 BEGIN_MESSAGE_MAP(COutputWnd, CDockablePane)
 	ON_WM_CREATE()
@@ -57,6 +56,17 @@ int COutputWnd::OnCreate(LPCREATESTRUCT lpCreateStruct)
 		return -1;      // fail to create
 	}
 
+	// OnCreate: before UpdateFonts()
+	if (!m_wndSummary.Create(_T(""), WS_CHILD | WS_VISIBLE | SS_NOPREFIX | SS_ENDELLIPSIS, rectDummy, this))
+	{
+		TRACE0("Failed to create summary\n");
+		return -1;
+	}
+
+	// UpdateFonts
+	if (m_wndSummary.GetSafeHwnd())
+		m_wndSummary.SetFont(&afxGlobalData.fontRegular);
+
 	UpdateFonts();
 
 	CString strTabName;
@@ -83,17 +93,24 @@ int COutputWnd::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	//FillFindWindow();
 	std::ifstream s{ CHART_DATA_FILENAME, std::ios::binary };
 	if (s)
-		m_wndChart.Load(s, std::filesystem::file_size(CHART_DATA_FILENAME)/sizeof(double));
+		m_wndChart.Load(s, std::filesystem::file_size(CHART_DATA_FILENAME) / sizeof(double));
 	m_wndChart.SetFocus();
 	return 0;
 }
 
+void COutputWnd::SetSummary(CString const& text)
+{
+	m_wndSummary.SetWindowText(text);
+}
+
 void COutputWnd::OnSize(UINT nType, int cx, int cy)
 {
+	// OnSize: replace the body
 	CDockablePane::OnSize(nType, cx, cy);
-
-	// Tab control should cover the whole client area:
-	m_wndTabs.SetWindowPos(nullptr, -1, -1, cx, cy, SWP_NOMOVE | SWP_NOACTIVATE | SWP_NOZORDER);
+	int const h{ afxGlobalData.GetTextHeight() + 6 };
+	if (m_wndSummary.GetSafeHwnd())
+		m_wndSummary.SetWindowPos(nullptr, 0, 0, cx, h, SWP_NOACTIVATE | SWP_NOZORDER);
+	m_wndTabs.SetWindowPos(nullptr, 0, h, cx, (std::max)(0, cy - h), SWP_NOACTIVATE | SWP_NOZORDER);
 }
 
 void COutputWnd::AdjustHorzScroll(CListBox& wndListBox)

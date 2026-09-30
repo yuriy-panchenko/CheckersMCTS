@@ -207,6 +207,7 @@
     <ClInclude Include="defines.h" />
     <ClInclude Include="desc_tree.h" />
     <ClInclude Include="framework.h" />
+    <ClInclude Include="GameStats.h" />
     <ClInclude Include="MainFrm.h" />
     <ClInclude Include="mcts.h" />
     <ClInclude Include="OutputWnd.h" />

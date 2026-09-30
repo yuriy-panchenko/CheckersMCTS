@@ -7,6 +7,7 @@
 #include "defines.h"
 #include "mcts.h"
 #include "CLearningThread.h"
+#include "GameStats.h"
 
 class CCheckersDoc : public CDocument
 {
@@ -73,12 +74,17 @@ protected:
 
 private:
 	BOOL IsHuman(game::Color)const;
-	void EndGame(std::optional<game::Color>);
+	//void EndGame(std::optional<game::Color>);
+// change these two declarations:
+	void EndGame(std::optional<game::Color>, GameStats::Reason);
+	// member:
+	GameStats m_Stats;
 	void UpdatePicture(BOOL doRedraw);
 	BOOL Test4Stale();
 	auto const& GetGame()const { return m_Tree.current_state(); }
 	Sample MakeSample()const;
-	void TrainOnSamples(std::optional<game::Color>);
+	std::pair<double, double> TrainOnSamples(std::optional<game::Color>);   // avg policy, avg value loss
+	//void TrainOnSamples(std::optional<game::Color>);
 	void KillLearner();
 	NNet::out_pair F1(std::vector<double> const&);
 
