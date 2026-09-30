@@ -24,7 +24,7 @@
 #endif
 
 #define TIMER_ELLAPLE	(100)
-#define LEARNING_RATE	(.002)
+#define LEARNING_RATE	(.3)
 #define STALE_COUNT		(3ull)
 #define NNET_FILENAME	_T("net.bin")
 
@@ -232,8 +232,6 @@ void CCheckersDoc::MakeMove(game::Move const& m)
 
 void CCheckersDoc::AutoMove()
 {
-	//MakeMove(m_PossibleMoves[rand() % m_PossibleMoves.size()]);
-	//::CWaitCursor _;
 	for (size_t i = 0; i < SIMULATION_COUNT; ++i)
 		m_Tree.run_simulation();
 
@@ -531,7 +529,7 @@ void CCheckersDoc::TrainOnSamples(std::optional<game::Color> winner)
 	}
 
 	//m_Net.adjust(LEARNING_RATE, m_Samples.size());
-	m_Net.adjust(LEARNING_RATE);
+	m_Net.adjust(LEARNING_RATE/m_Samples.size());
 
 	CString str;
 	str.Format(_T("%I64u: %s [ %I64u:%I64u ] %zu moves, avg policy loss=%.4f, avg value loss=%.4f, value=%.4f"),
