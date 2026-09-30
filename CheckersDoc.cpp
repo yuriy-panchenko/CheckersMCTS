@@ -51,6 +51,7 @@ BEGIN_MESSAGE_MAP(CCheckersDoc, CDocument)
 
 	ON_COMMAND(ID_START_LEARNING_THREAD, &CCheckersDoc::OnStartLearningThread)
 	ON_UPDATE_COMMAND_UI(ID_START_LEARNING_THREAD, &CCheckersDoc::OnUpdateStartLearningThread)
+	ON_COMMAND(ID_SHOCK, &CCheckersDoc::OnShock)
 END_MESSAGE_MAP()
 
 // CCheckersDoc construction/destruction
@@ -598,4 +599,9 @@ void CCheckersDoc::OnUpdateStartLearningThread(CCmdUI* pCmdUI)
 {
 	pCmdUI->SetCheck(m_pLearnTh != nullptr);
 	pCmdUI->Enable(IsHuman(Color::White) || IsHuman(Color::Black));
+}
+
+void CCheckersDoc::OnShock()
+{
+	m_Net.shock();
 }

@@ -63,6 +63,7 @@ protected:
 	afx_msg void OnUpdateWhiteHuman(CCmdUI* pCmdUI);
 	afx_msg void OnStartLearningThread();
 	afx_msg void OnUpdateStartLearningThread(CCmdUI* pCmdUI);
+	afx_msg void OnShock();
 	DECLARE_MESSAGE_MAP()
 
 #ifdef SHARED_HANDLERS

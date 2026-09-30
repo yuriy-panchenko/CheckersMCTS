@@ -85,9 +85,11 @@ void CChatWnd::Load(std::ifstream& s, size_t element_count)
 	if (!m_Data.empty())
 	{
 		m_Max = m_Min = m_Data.front();
+		m_bInitial = FALSE;
 		for (auto db : m_Data)
 			m_Max = max(m_Max, db), m_Min = min(m_Min, db);
 	}
+	else m_bInitial = TRUE;
 }
 
 
