@@ -1,0 +1,108 @@
+diff --git a/CLearningThread.cpp b/CLearningThread.cpp
+index 3e65e32..7964697 100644
+--- a/CLearningThread.cpp
++++ b/CLearningThread.cpp
+@@ -106,9 +106,8 @@ Sample CLearningThread::MakeSample() const
+ 
+ void CLearningThread::EndGame(std::optional<game::Color> winner)
+ {
+-	if (winner)
+-		for (auto& sam : m_Samples)
+-			sam.real_value = winner ? sam.mover == *winner ? 1. : -1. : .0;
++	for (auto& sam : m_Samples)
++		sam.real_value = winner ? (sam.mover == *winner ? 1. : -1.) : MCTS::draw_value;   // draw: same target for both players
+ 
+ 	TrainOnSamples(winner);
+ 
+diff --git a/mcts.cpp b/mcts.cpp
+index a7351d6..f9bb1a5 100644
+--- a/mcts.cpp
++++ b/mcts.cpp
+@@ -123,10 +123,10 @@ namespace mcts
+ 		return *pBest;
+ 	}
+ 
+-	double MCTS::select_and_expand(Node& node)
++	MCTS::Outcome MCTS::select_and_expand(Node& node)
+ 	{
+ 		if (node.terminal_val.has_value())
+-			return *node.terminal_val;
++			return { *node.terminal_val, false };
+ 
+ 		if (node.edges.empty())
+ 		{
+@@ -135,9 +135,9 @@ namespace mcts
+ 			{
+ 				//node.terminal = true;
+ 				node.terminal_val = -1.0;   // no moves => the mover here loses
+-				return *node.terminal_val;
++				return { *node.terminal_val, false };
+ 			}
+-			return expand(node, legal_moves);
++			return { expand(node, legal_moves), false };
+ 		}
+ 
+ 		Edge& best{ select_edge(node) };
+@@ -151,27 +151,31 @@ namespace mcts
+ 		auto& child{ *best.child };
+ 		bool const turn_passed{ child.state.WhoMakesTurn() != node.state.WhoMakesTurn() };
+ 
+-		double value;
++		Outcome out;
+ 		if (!turn_passed)
+-			value = select_and_expand(child);               // mid-chain jump: same player, nothing to count
++			out = select_and_expand(child);                 // mid-chain jump: same player, nothing to count
+ 		else
+ 		{
+ 			auto const id{ child.state.GetBoard().GetZipID() };
+ 			if (seen(id) + 1 >= stale_limit)
+-				value = 0.;                                // this would be the 3rd occurrence: a draw
++				out = { draw_value, true };                 // this would be the 3rd occurrence: a draw
+ 			else
+ 			{
+ 				++m_Seen[id];
+-				value = -select_and_expand(child);         // flip: opponent's perspective
++				out = select_and_expand(child);
+ 				auto const it{ m_Seen.find(id) };
+ 				if (--it->second == 0)
+ 					m_Seen.erase(it);                      // keep the map from growing with the tree
+ 			}
+ 		}
+ 
++		// Edge value from THIS node's mover's perspective.
++		// A draw is equally bad for both players, so it is never flipped; everything else flips when the turn passed.
++		double const value{ out.draw ? draw_value : turn_passed ? -out.v : out.v };
++
+ 		++best.Visits;
+ 		best.BackedUp += value;
+-		return value;
++		return { value, out.draw };
+ 	}
+ 
+ 	double MCTS::gamma_sample(double alpha) const
+diff --git a/mcts.h b/mcts.h
+index 84c2c1e..65c55e7 100644
+--- a/mcts.h
++++ b/mcts.h
+@@ -34,6 +34,8 @@ namespace mcts
+ 		using out_nnet = std::pair<vdb, double>;
+ 		using callback = std::function<out_nnet(vdb const&)>;
+ 		static constexpr size_t stale_limit{ 3 };
++		// Value of a draw for EACH player (not a signed value: it must not be negated when backing up).
++		static constexpr double draw_value{ -.1 };
+ 	public:
+ 		MCTS(game::Checkers const& initial_state, callback&& cb, double _c_puct = 1.5);
+ 		MCTS& operator=(MCTS&&);
+@@ -51,9 +53,11 @@ namespace mcts
+ 		size_t root_repeats() const { return seen(root->state.GetBoard().GetZipID()); }
+ 
+ 	private:
++		// v is from the perspective of the player to move at the node; draw is set when the line ends in a repetition draw
++		struct Outcome { double v; bool draw; };
+ 		double expand(Node& node, std::vector<game::Move> const& legal_moves);
+ 		Edge& select_edge(Node& node);
+-		double select_and_expand(Node& node);
++		Outcome select_and_expand(Node& node);
+ 		double gamma_sample(double alpha)const;
+ 		size_t seen(id::zip64 const& id) const;
+ 

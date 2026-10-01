@@ -123,10 +123,10 @@ namespace mcts
 		return *pBest;
 	}
 
-	double MCTS::select_and_expand(Node& node)
+	MCTS::Outcome MCTS::select_and_expand(Node& node)
 	{
 		if (node.terminal_val.has_value())
-			return *node.terminal_val;
+			return { *node.terminal_val, false };
 
 		if (node.edges.empty())
 		{
@@ -135,9 +135,9 @@ namespace mcts
 			{
 				//node.terminal = true;
 				node.terminal_val = -1.0;   // no moves => the mover here loses
-				return *node.terminal_val;
+				return { *node.terminal_val, false };
 			}
-			return expand(node, legal_moves);
+			return { expand(node, legal_moves), false };
 		}
 
 		Edge& best{ select_edge(node) };
@@ -151,27 +151,31 @@ namespace mcts
 		auto& child{ *best.child };
 		bool const turn_passed{ child.state.WhoMakesTurn() != node.state.WhoMakesTurn() };
 
-		double value;
+		Outcome out;
 		if (!turn_passed)
-			value = select_and_expand(child);               // mid-chain jump: same player, nothing to count
+			out = select_and_expand(child);                 // mid-chain jump: same player, nothing to count
 		else
 		{
 			auto const id{ child.state.GetBoard().GetZipID() };
 			if (seen(id) + 1 >= stale_limit)
-				value = 0.;                                // this would be the 3rd occurrence: a draw
+				out = { draw_value, true };                 // this would be the 3rd occurrence: a draw
 			else
 			{
 				++m_Seen[id];
-				value = -select_and_expand(child);         // flip: opponent's perspective
+				out = select_and_expand(child);
 				auto const it{ m_Seen.find(id) };
 				if (--it->second == 0)
 					m_Seen.erase(it);                      // keep the map from growing with the tree
 			}
 		}
 
+		// Edge value from THIS node's mover's perspective.
+		// A draw is equally bad for both players, so it is never flipped; everything else flips when the turn passed.
+		double const value{ out.draw ? draw_value : turn_passed ? -out.v : out.v };
+
 		++best.Visits;
 		best.BackedUp += value;
-		return value;
+		return { value, out.draw };
 	}
 
 	double MCTS::gamma_sample(double alpha) const

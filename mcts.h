@@ -34,6 +34,8 @@ namespace mcts
 		using out_nnet = std::pair<vdb, double>;
 		using callback = std::function<out_nnet(vdb const&)>;
 		static constexpr size_t stale_limit{ 3 };
+		// Value of a draw for EACH player (not a signed value: it must not be negated when backing up).
+		static constexpr double draw_value{ +.1 };
 	public:
 		MCTS(game::Checkers const& initial_state, callback&& cb, double _c_puct = 1.5);
 		MCTS& operator=(MCTS&&);
@@ -51,9 +53,11 @@ namespace mcts
 		size_t root_repeats() const { return seen(root->state.GetBoard().GetZipID()); }
 
 	private:
+		// v is from the perspective of the player to move at the node; draw is set when the line ends in a repetition draw
+		struct Outcome { double v; bool draw; };
 		double expand(Node& node, std::vector<game::Move> const& legal_moves);
 		Edge& select_edge(Node& node);
-		double select_and_expand(Node& node);
+		Outcome select_and_expand(Node& node);
 		double gamma_sample(double alpha)const;
 		size_t seen(id::zip64 const& id) const;
 

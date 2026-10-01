@@ -1,0 +1,194 @@
+diff --git a/CheckersDoc.cpp b/CheckersDoc.cpp
+index 5b041aa..c53c8e7 100644
+--- a/CheckersDoc.cpp
++++ b/CheckersDoc.cpp
+@@ -221,9 +221,8 @@ void CCheckersDoc::MakeMove(game::Move const& m)
+ 	m_PossibleMoves = GetGame().GetAvailableMoves();
+ 
+ 	//	TestEndOfGame
+-	if (!m_PossibleMoves.empty() && m_Tree.root_repeats() >= MCTS::stale_limit)
+-		//EndGame(!GetGame().WhoMakesTurn());
+-		EndGame({}, GameStats::Reason::Stale);
++	if (!m_PossibleMoves.empty() && m_Tree.root_quiet() >= MCTS::no_progress_limit)
++		EndGame({}, GameStats::Reason::NoProgress);
+ 	else if (m_PossibleMoves.empty())
+ 		EndGame(!GetGame().WhoMakesTurn(), GameStats::Reason::NoMoves);
+ 	else if (!IsHuman(GetGame().WhoMakesTurn()))
+diff --git a/GameStats.h b/GameStats.h
+index d1d556c..5fdb914 100644
+--- a/GameStats.h
++++ b/GameStats.h
+@@ -10,7 +10,16 @@
+ class GameStats
+ {
+ public:
+-	enum class Reason { NoMoves, Stale };
++	enum class Reason { NoMoves, Stale, NoProgress };
++
++	static char const* name(Reason r)
++	{
++		return r == Reason::Stale ? "Stale" : r == Reason::NoProgress ? "NoProgress" : "NoMoves";
++	}
++	static Reason parse(std::string const& s)
++	{
++		return s == "Stale" ? Reason::Stale : s == "NoProgress" ? Reason::NoProgress : Reason::NoMoves;
++	}
+ 
+ 	struct Record
+ 	{
+@@ -31,7 +40,7 @@ public:
+ 			if (!r.winner) ++draws;
+ 			else if (*r.winner == game::Color::White) ++white;
+ 			else ++black;
+-			if (r.reason == Reason::Stale) ++stale;
++			if (r.reason != Reason::NoMoves) ++stale;   // any draw ending (repetition or no progress)
+ 			plies_sum += r.plies;
+ 			plies_max = (std::max)(plies_max, r.plies);
+ 		}
+@@ -75,7 +84,7 @@ public:
+ 			s << "game,winner,reason,plies,policy_loss,value_loss\n";
+ 		s << r.game << ','
+ 			<< (!r.winner ? 'D' : *r.winner == game::Color::White ? 'W' : 'B') << ','
+-			<< (r.reason == Reason::Stale ? "Stale" : "NoMoves") << ','
++			<< name(r.reason) << ','
+ 			<< r.plies << ',' << r.policy_loss << ',' << r.value_loss << '\n';
+ 	}
+ 
+@@ -97,7 +106,7 @@ public:
+ 				if (f[1] == "W") w = game::Color::White;
+ 				else if (f[1] == "B") w = game::Color::Black;
+ 
+-				add({ std::stoull(f[0]), w, f[2] == "Stale" ? Reason::Stale : Reason::NoMoves,
++				add({ std::stoull(f[0]), w, parse(f[2]),
+ 					std::stoull(f[3]), std::stod(f[4]), std::stod(f[5]) });
+ 			}
+ 			catch (...) {}   // skip a damaged line
+diff --git a/mcts.cpp b/mcts.cpp
+index f9bb1a5..91ac556 100644
+--- a/mcts.cpp
++++ b/mcts.cpp
+@@ -10,7 +10,6 @@ namespace mcts
+ 		, m_clbThink{ std::move(cb) }
+ 		, c_puct{ _c_puct }
+ 	{
+-		m_Seen[initial_state.GetBoard().GetZipID()] = 1;
+ 	}
+ 
+ 	MCTS& MCTS::operator=(MCTS&& oth)
+@@ -18,7 +17,6 @@ namespace mcts
+ 		root = std::move(oth.root);
+ 		m_clbThink = std::move(oth.m_clbThink);
+ 		c_puct = oth.c_puct;
+-		m_Seen = std::move(oth.m_Seen);
+ 		return *this;
+ 	}
+ 
+@@ -66,11 +64,12 @@ namespace mcts
+ 				root = std::move(it->child);   // reuse existing subtree
+ 			else
+ 			{
++				auto const quiet{ next_quiet(*root, jump) };   // must be read before the board changes
+ 				root = std::make_unique<Node>(root->state);   // fresh node, no stats to reuse
+ 				root->state.Do(jump);
++				root->quiet = quiet;
+ 			}
+ 		}
+-		++m_Seen[root->state.GetBoard().GetZipID()];
+ 	}
+ 
+ 	double MCTS::expand(Node& node, std::vector<game::Move> const& legal_moves)
+@@ -146,28 +145,14 @@ namespace mcts
+ 		{
+ 			best.child = std::make_unique<Node>(node.state);
+ 			best.child->state.Do(best.j);
++			best.child->quiet = next_quiet(node, best.j);
+ 		}
+ 
+ 		auto& child{ *best.child };
+ 		bool const turn_passed{ child.state.WhoMakesTurn() != node.state.WhoMakesTurn() };
+ 
+-		Outcome out;
+-		if (!turn_passed)
+-			out = select_and_expand(child);                 // mid-chain jump: same player, nothing to count
+-		else
+-		{
+-			auto const id{ child.state.GetBoard().GetZipID() };
+-			if (seen(id) + 1 >= stale_limit)
+-				out = { draw_value, true };                 // this would be the 3rd occurrence: a draw
+-			else
+-			{
+-				++m_Seen[id];
+-				out = select_and_expand(child);
+-				auto const it{ m_Seen.find(id) };
+-				if (--it->second == 0)
+-					m_Seen.erase(it);                      // keep the map from growing with the tree
+-			}
+-		}
++		// No-progress limit reached: a draw. (Mid-chain nodes follow a capture, so their counter is 0.)
++		Outcome const out{ child.quiet >= no_progress_limit ? Outcome{ draw_value, true } : select_and_expand(child) };
+ 
+ 		// Edge value from THIS node's mover's perspective.
+ 		// A draw is equally bad for both players, so it is never flipped; everything else flips when the turn passed.
+@@ -184,11 +169,11 @@ namespace mcts
+ 		return std::gamma_distribution<double>(alpha, 1.0)(rng);
+ 	}
+ 
+-	// real-game positions + positions on the current search path
+-	size_t MCTS::seen(id::zip64 const& id) const
++	// A capture or a pawn move is irreversible progress and resets the counter; a quiet king move adds one ply.
++	int MCTS::next_quiet(Node const& parent, game::Jump const& j)
+ 	{
+-		auto const it{ m_Seen.find(id) };
+-		return it == m_Seen.end() ? 0 : it->second;
++		bool const progress{ j.IsKiller() || parent.state.GetBoard().at(j.From()).rank == game::Rank::Pawn };
++		return progress ? 0 : parent.quiet + 1;
+ 	}
+ 
+ 	std::vector<double> MCTS::mask_and_softmax(std::vector<double> const& raw_logits, std::unordered_set<size_t> const& legal_indices)
+diff --git a/mcts.h b/mcts.h
+index 65c55e7..78f4fc6 100644
+--- a/mcts.h
++++ b/mcts.h
+@@ -24,6 +24,7 @@ namespace mcts
+ 	{
+ 		game::Checkers state;
+ 		std::optional<double> terminal_val;
++		int quiet{ 0 };                // plies since the last capture or pawn move (king moves only)
+ 		std::vector<Edge> edges;       // populated once, at expansion time
+ 	};
+ 
+@@ -33,7 +34,7 @@ namespace mcts
+ 		using vdb = std::vector<double>;
+ 		using out_nnet = std::pair<vdb, double>;
+ 		using callback = std::function<out_nnet(vdb const&)>;
+-		static constexpr size_t stale_limit{ 3 };
++		static constexpr int no_progress_limit{ 40 };   // plies (20 moves per side) with no capture and no pawn move => draw
+ 		// Value of a draw for EACH player (not a signed value: it must not be negated when backing up).
+ 		static constexpr double draw_value{ -.1 };
+ 	public:
+@@ -50,7 +51,7 @@ namespace mcts
+ 
+ 		static std::vector<double> mask_and_softmax(std::vector<double> const& raw_logits, std::unordered_set<size_t> const& legal_indices);
+ 		void add_root_noise(double alpha = .3, double eps = .25);
+-		size_t root_repeats() const { return seen(root->state.GetBoard().GetZipID()); }
++		int root_quiet() const { return root->quiet; }
+ 
+ 	private:
+ 		// v is from the perspective of the player to move at the node; draw is set when the line ends in a repetition draw
+@@ -59,14 +60,12 @@ namespace mcts
+ 		Edge& select_edge(Node& node);
+ 		Outcome select_and_expand(Node& node);
+ 		double gamma_sample(double alpha)const;
+-		size_t seen(id::zip64 const& id) const;
++		static int next_quiet(Node const& parent, game::Jump const& j);
+ 
+ 	private:
+ 		std::unique_ptr<Node> root;
+ 		//chk::net* pNet;
+ 		callback m_clbThink;
+ 		double c_puct;
+-
+-		std::map<id::zip64, size_t> m_Seen;   // real-game positions + positions on the current search path
+ 	};
+ }
+\ No newline at end of file

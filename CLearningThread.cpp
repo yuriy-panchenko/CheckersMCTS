@@ -106,9 +106,8 @@ Sample CLearningThread::MakeSample() const
 
 void CLearningThread::EndGame(std::optional<game::Color> winner)
 {
-	if (winner)
-		for (auto& sam : m_Samples)
-			sam.real_value = winner ? sam.mover == *winner ? 1. : -1. : .0;
+	for (auto& sam : m_Samples)
+		sam.real_value = winner ? (sam.mover == *winner ? 1. : -1.) : MCTS::draw_value;   // draw: same target for both players
 
 	TrainOnSamples(winner);
 
