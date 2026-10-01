@@ -226,12 +226,12 @@ void CCheckersDoc::MakeMove(game::Move const& m)
 	else if (m_PossibleMoves.empty())
 		EndGame(!GetGame().WhoMakesTurn(), GameStats::Reason::NoMoves);
 	else if (!IsHuman(GetGame().WhoMakesTurn()))
-	/*{
-		if (auto pFr{ (CMainFrame*)theApp.GetMainWnd() })
-			if (auto pView{ pFr->GetActiveView() })
-				pView->PostMessage(WM_AUTO_MOVE, 0, 0);
-	}*/
-	m_idTimer = ::SetTimer(NULL, 0, TIMER_ELLAPLE, AutoMoveProc);
+		/*{
+			if (auto pFr{ (CMainFrame*)theApp.GetMainWnd() })
+				if (auto pView{ pFr->GetActiveView() })
+					pView->PostMessage(WM_AUTO_MOVE, 0, 0);
+		}*/
+		m_idTimer = ::SetTimer(NULL, 0, TIMER_ELLAPLE, AutoMoveProc);
 }
 
 void CCheckersDoc::AutoMove()
@@ -287,9 +287,8 @@ void CCheckersDoc::EndGame(std::optional<Color> winner, GameStats::Reason why)
 		AfxMessageBox(str);
 	}
 
-	if (winner)
-		for (auto& sam : m_Samples)
-			sam.real_value = winner ? sam.mover == *winner ? 1. : -1. : MCTS::draw_value;
+	for (auto& sam : m_Samples)
+		sam.real_value = winner ? sam.mover == *winner ? 1. : -1. : MCTS::draw_value;
 
 	size_t const plies{ m_Samples.size() };
 	auto const [ploss, vloss] = TrainOnSamples(winner);
@@ -481,7 +480,7 @@ void CCheckersDoc::OnUpdateIdsIndicatorAdjusted(CCmdUI* pCmdUI)
 void CCheckersDoc::OnUpdateIdsIndicatorMoveCount(CCmdUI* pCmdUI)
 {
 	CString str;
-	str.Format(_T("M %I64u"), m_uMoveCount);
+	str.Format(_T("%I64u:%d"), m_uMoveCount, m_Tree.root_quiet());
 	pCmdUI->SetText(str);
 }
 
