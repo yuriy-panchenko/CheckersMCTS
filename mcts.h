@@ -33,6 +33,7 @@ namespace mcts
 		using vdb = std::vector<double>;
 		using out_nnet = std::pair<vdb, double>;
 		using callback = std::function<out_nnet(vdb const&)>;
+		static constexpr size_t stale_limit{ 3 };
 	public:
 		MCTS(game::Checkers const& initial_state, callback&& cb, double _c_puct = 1.5);
 		MCTS& operator=(MCTS&&);
@@ -47,17 +48,21 @@ namespace mcts
 
 		static std::vector<double> mask_and_softmax(std::vector<double> const& raw_logits, std::unordered_set<size_t> const& legal_indices);
 		void add_root_noise(double alpha = .3, double eps = .25);
+		size_t root_repeats() const { return seen(root->state.GetBoard().GetZipID()); }
 
 	private:
 		double expand(Node& node, std::vector<game::Move> const& legal_moves);
 		Edge& select_edge(Node& node);
 		double select_and_expand(Node& node);
 		double gamma_sample(double alpha)const;
+		size_t seen(id::zip64 const& id) const;
 
 	private:
 		std::unique_ptr<Node> root;
 		//chk::net* pNet;
 		callback m_clbThink;
 		double c_puct;
+
+		std::map<id::zip64, size_t> m_Seen;   // real-game positions + positions on the current search path
 	};
 }

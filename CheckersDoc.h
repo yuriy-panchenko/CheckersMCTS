@@ -81,7 +81,7 @@ private:
 	// member:
 	GameStats m_Stats;
 	void UpdatePicture(BOOL doRedraw);
-	BOOL Test4Stale();
+	//BOOL Test4Stale();
 	auto const& GetGame()const { return m_Tree.current_state(); }
 	Sample MakeSample()const;
 	std::pair<double, double> TrainOnSamples(std::optional<game::Color>);   // avg policy, avg value loss
@@ -91,7 +91,7 @@ private:
 
 	BOOL m_isWhiteHuman, m_isBlackHuman;
 	Moves m_PossibleMoves;
-	std::map<id::zip64, size_t> m_idCount;
+	//std::map<id::zip64, size_t> m_idCount;
 	UINT_PTR m_idTimer;
 	SIZE_T m_uGameCount, m_uMoveCount, m_winWhite, m_winBlack;
 	mcts::MCTS m_Tree;

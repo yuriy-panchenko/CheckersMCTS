@@ -20,12 +20,12 @@
 #define new DEBUG_NEW
 #define SIMULATION_COUNT	(100)
 #else
-#define SIMULATION_COUNT	(2'000)
+#define SIMULATION_COUNT	(1'000)
 #endif
 
 #define TIMER_ELLAPLE	(50)
 #define LEARNING_RATE	(.3)
-#define STALE_COUNT		(3ull)
+//#define STALE_COUNT		(3ull)
 #define NNET_FILENAME	_T("net.bin")
 #define STATS_FILENAME	_T("games.csv")
 
@@ -221,7 +221,7 @@ void CCheckersDoc::MakeMove(game::Move const& m)
 	m_PossibleMoves = GetGame().GetAvailableMoves();
 
 	//	TestEndOfGame
-	if (!m_PossibleMoves.empty() && Test4Stale())
+	if (!m_PossibleMoves.empty() && m_Tree.root_repeats() >= MCTS::stale_limit)
 		//EndGame(!GetGame().WhoMakesTurn());
 		EndGame({}, GameStats::Reason::Stale);
 	else if (m_PossibleMoves.empty())
@@ -336,7 +336,7 @@ BOOL CCheckersDoc::OnNewDocument()
 
 	++m_uGameCount;
 	m_uMoveCount = 0;
-	m_idCount.clear();
+	//m_idCount.clear();
 
 	m_Tree = MCTS{ { Color::Black }, { [this](auto const& inp) {return F1(inp); }} };
 	MakeMove({});
@@ -509,10 +509,10 @@ void CCheckersDoc::OnUpdateStartPause(CCmdUI* pCmdUI)
 	pCmdUI->Enable(!(IsHuman(Color::White) && IsHuman(Color::Black)));
 }
 
-BOOL CCheckersDoc::Test4Stale()
-{
-	return ++m_idCount[GetBoard().GetZipID()] >= STALE_COUNT;
-}
+//BOOL CCheckersDoc::Test4Stale()
+//{
+//	return ++m_idCount[GetBoard().GetZipID()] >= STALE_COUNT;
+//}
 
 std::pair<double, double> CCheckersDoc::TrainOnSamples(std::optional<game::Color> winner)
 {

@@ -9,13 +9,16 @@ namespace mcts
 		//, pNet{ &_net }
 		, m_clbThink{ std::move(cb) }
 		, c_puct{ _c_puct }
-	{}
+	{
+		m_Seen[initial_state.GetBoard().GetZipID()] = 1;
+	}
 
 	MCTS& MCTS::operator=(MCTS&& oth)
 	{
 		root = std::move(oth.root);
 		m_clbThink = std::move(oth.m_clbThink);
 		c_puct = oth.c_puct;
+		m_Seen = std::move(oth.m_Seen);
 		return *this;
 	}
 
@@ -67,6 +70,7 @@ namespace mcts
 				root->state.Do(jump);
 			}
 		}
+		++m_Seen[root->state.GetBoard().GetZipID()];
 	}
 
 	double MCTS::expand(Node& node, std::vector<game::Move> const& legal_moves)
@@ -144,15 +148,29 @@ namespace mcts
 			best.child->state.Do(best.j);
 		}
 
-		double value{ select_and_expand(*best.child) };
-		// Flip perspective only if the mover actually changed (i.e. this
-		// wasn't a mid-chain jump where the same player continues).
-		if (best.child->state.WhoMakesTurn() != node.state.WhoMakesTurn())
-			value = -value;
+		auto& child{ *best.child };
+		bool const turn_passed{ child.state.WhoMakesTurn() != node.state.WhoMakesTurn() };
+
+		double value;
+		if (!turn_passed)
+			value = select_and_expand(child);               // mid-chain jump: same player, nothing to count
+		else
+		{
+			auto const id{ child.state.GetBoard().GetZipID() };
+			if (seen(id) + 1 >= stale_limit)
+				value = 0.;                                // this would be the 3rd occurrence: a draw
+			else
+			{
+				++m_Seen[id];
+				value = -select_and_expand(child);         // flip: opponent's perspective
+				auto const it{ m_Seen.find(id) };
+				if (--it->second == 0)
+					m_Seen.erase(it);                      // keep the map from growing with the tree
+			}
+		}
 
 		++best.Visits;
 		best.BackedUp += value;
-
 		return value;
 	}
 
@@ -160,6 +178,13 @@ namespace mcts
 	{
 		static std::mt19937 rng{ std::random_device{}() };
 		return std::gamma_distribution<double>(alpha, 1.0)(rng);
+	}
+
+	// real-game positions + positions on the current search path
+	size_t MCTS::seen(id::zip64 const& id) const
+	{
+		auto const it{ m_Seen.find(id) };
+		return it == m_Seen.end() ? 0 : it->second;
 	}
 
 	std::vector<double> MCTS::mask_and_softmax(std::vector<double> const& raw_logits, std::unordered_set<size_t> const& legal_indices)
