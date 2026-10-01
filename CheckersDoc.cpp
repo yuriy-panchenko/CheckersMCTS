@@ -290,7 +290,7 @@ void CCheckersDoc::EndGame(std::optional<Color> winner, GameStats::Reason why)
 
 	if (winner)
 		for (auto& sam : m_Samples)
-			sam.real_value = winner ? sam.mover == *winner ? 1. : -1. : .0;
+			sam.real_value = winner ? sam.mover == *winner ? 1. : -1. : MCTS::draw_value;
 
 	size_t const plies{ m_Samples.size() };
 	auto const [ploss, vloss] = TrainOnSamples(winner);
