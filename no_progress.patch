@@ -15,7 +15,7 @@ index 5b041aa..c53c8e7 100644
  		EndGame(!GetGame().WhoMakesTurn(), GameStats::Reason::NoMoves);
  	else if (!IsHuman(GetGame().WhoMakesTurn()))
 diff --git a/GameStats.h b/GameStats.h
-index d1d556c..5fdb914 100644
+index d1d556c..0e80f25 100644
 --- a/GameStats.h
 +++ b/GameStats.h
 @@ -10,7 +10,16 @@
@@ -23,7 +23,7 @@ index d1d556c..5fdb914 100644
  {
  public:
 -	enum class Reason { NoMoves, Stale };
-+	enum class Reason { NoMoves, Stale, NoProgress };
++	enum class Reason { NoMoves, Stale, NoProgress };   // Stale = old repetition rule, kept so old CSV rows load
 +
 +	static char const* name(Reason r)
 +	{
@@ -146,7 +146,7 @@ index f9bb1a5..91ac556 100644
  
  	std::vector<double> MCTS::mask_and_softmax(std::vector<double> const& raw_logits, std::unordered_set<size_t> const& legal_indices)
 diff --git a/mcts.h b/mcts.h
-index 65c55e7..78f4fc6 100644
+index 6c7affc..cf0dd7b 100644
 --- a/mcts.h
 +++ b/mcts.h
 @@ -24,6 +24,7 @@ namespace mcts
@@ -164,7 +164,7 @@ index 65c55e7..78f4fc6 100644
 -		static constexpr size_t stale_limit{ 3 };
 +		static constexpr int no_progress_limit{ 40 };   // plies (20 moves per side) with no capture and no pawn move => draw
  		// Value of a draw for EACH player (not a signed value: it must not be negated when backing up).
- 		static constexpr double draw_value{ -.1 };
+ 		static constexpr double draw_value{ +.1 };
  	public:
 @@ -50,7 +51,7 @@ namespace mcts
  

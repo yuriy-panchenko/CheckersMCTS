@@ -10,7 +10,6 @@ namespace mcts
 		, m_clbThink{ std::move(cb) }
 		, c_puct{ _c_puct }
 	{
-		m_Seen[initial_state.GetBoard().GetZipID()] = 1;
 	}
 
 	MCTS& MCTS::operator=(MCTS&& oth)
@@ -18,7 +17,6 @@ namespace mcts
 		root = std::move(oth.root);
 		m_clbThink = std::move(oth.m_clbThink);
 		c_puct = oth.c_puct;
-		m_Seen = std::move(oth.m_Seen);
 		return *this;
 	}
 
@@ -66,11 +64,12 @@ namespace mcts
 				root = std::move(it->child);   // reuse existing subtree
 			else
 			{
+				auto const quiet{ next_quiet(*root, jump) };   // must be read before the board changes
 				root = std::make_unique<Node>(root->state);   // fresh node, no stats to reuse
 				root->state.Do(jump);
+				root->quiet = quiet;
 			}
 		}
-		++m_Seen[root->state.GetBoard().GetZipID()];
 	}
 
 	double MCTS::expand(Node& node, std::vector<game::Move> const& legal_moves)
@@ -146,28 +145,14 @@ namespace mcts
 		{
 			best.child = std::make_unique<Node>(node.state);
 			best.child->state.Do(best.j);
+			best.child->quiet = next_quiet(node, best.j);
 		}
 
 		auto& child{ *best.child };
 		bool const turn_passed{ child.state.WhoMakesTurn() != node.state.WhoMakesTurn() };
 
-		Outcome out;
-		if (!turn_passed)
-			out = select_and_expand(child);                 // mid-chain jump: same player, nothing to count
-		else
-		{
-			auto const id{ child.state.GetBoard().GetZipID() };
-			if (seen(id) + 1 >= stale_limit)
-				out = { draw_value, true };                 // this would be the 3rd occurrence: a draw
-			else
-			{
-				++m_Seen[id];
-				out = select_and_expand(child);
-				auto const it{ m_Seen.find(id) };
-				if (--it->second == 0)
-					m_Seen.erase(it);                      // keep the map from growing with the tree
-			}
-		}
+		// No-progress limit reached: a draw. (Mid-chain nodes follow a capture, so their counter is 0.)
+		Outcome const out{ child.quiet >= no_progress_limit ? Outcome{ draw_value, true } : select_and_expand(child) };
 
 		// Edge value from THIS node's mover's perspective.
 		// A draw is equally bad for both players, so it is never flipped; everything else flips when the turn passed.
@@ -184,11 +169,11 @@ namespace mcts
 		return std::gamma_distribution<double>(alpha, 1.0)(rng);
 	}
 
-	// real-game positions + positions on the current search path
-	size_t MCTS::seen(id::zip64 const& id) const
+	// A capture or a pawn move is irreversible progress and resets the counter; a quiet king move adds one ply.
+	int MCTS::next_quiet(Node const& parent, game::Jump const& j)
 	{
-		auto const it{ m_Seen.find(id) };
-		return it == m_Seen.end() ? 0 : it->second;
+		bool const progress{ j.IsKiller() || parent.state.GetBoard().at(j.From()).rank == game::Rank::Pawn };
+		return progress ? 0 : parent.quiet + 1;
 	}
 
 	std::vector<double> MCTS::mask_and_softmax(std::vector<double> const& raw_logits, std::unordered_set<size_t> const& legal_indices)

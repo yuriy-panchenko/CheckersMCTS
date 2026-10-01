@@ -221,9 +221,8 @@ void CCheckersDoc::MakeMove(game::Move const& m)
 	m_PossibleMoves = GetGame().GetAvailableMoves();
 
 	//	TestEndOfGame
-	if (!m_PossibleMoves.empty() && m_Tree.root_repeats() >= MCTS::stale_limit)
-		//EndGame(!GetGame().WhoMakesTurn());
-		EndGame({}, GameStats::Reason::Stale);
+	if (!m_PossibleMoves.empty() && m_Tree.root_quiet() >= MCTS::no_progress_limit)
+		EndGame({}, GameStats::Reason::NoProgress);
 	else if (m_PossibleMoves.empty())
 		EndGame(!GetGame().WhoMakesTurn(), GameStats::Reason::NoMoves);
 	else if (!IsHuman(GetGame().WhoMakesTurn()))

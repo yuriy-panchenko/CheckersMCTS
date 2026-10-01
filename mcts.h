@@ -24,6 +24,7 @@ namespace mcts
 	{
 		game::Checkers state;
 		std::optional<double> terminal_val;
+		int quiet{ 0 };                // plies since the last capture or pawn move (king moves only)
 		std::vector<Edge> edges;       // populated once, at expansion time
 	};
 
@@ -33,9 +34,9 @@ namespace mcts
 		using vdb = std::vector<double>;
 		using out_nnet = std::pair<vdb, double>;
 		using callback = std::function<out_nnet(vdb const&)>;
-		static constexpr size_t stale_limit{ 3 };
+		static constexpr int no_progress_limit{ 70 };   // plies (20 moves per side) with no capture and no pawn move => draw
 		// Value of a draw for EACH player (not a signed value: it must not be negated when backing up).
-		static constexpr double draw_value{ +.1 };
+		static constexpr double draw_value{ -.1 };
 	public:
 		MCTS(game::Checkers const& initial_state, callback&& cb, double _c_puct = 1.5);
 		MCTS& operator=(MCTS&&);
@@ -50,7 +51,7 @@ namespace mcts
 
 		static std::vector<double> mask_and_softmax(std::vector<double> const& raw_logits, std::unordered_set<size_t> const& legal_indices);
 		void add_root_noise(double alpha = .3, double eps = .25);
-		size_t root_repeats() const { return seen(root->state.GetBoard().GetZipID()); }
+		int root_quiet() const { return root->quiet; }
 
 	private:
 		// v is from the perspective of the player to move at the node; draw is set when the line ends in a repetition draw
@@ -59,14 +60,12 @@ namespace mcts
 		Edge& select_edge(Node& node);
 		Outcome select_and_expand(Node& node);
 		double gamma_sample(double alpha)const;
-		size_t seen(id::zip64 const& id) const;
+		static int next_quiet(Node const& parent, game::Jump const& j);
 
 	private:
 		std::unique_ptr<Node> root;
 		//chk::net* pNet;
 		callback m_clbThink;
 		double c_puct;
-
-		std::map<id::zip64, size_t> m_Seen;   // real-game positions + positions on the current search path
 	};
 }

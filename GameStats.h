@@ -10,7 +10,16 @@
 class GameStats
 {
 public:
-	enum class Reason { NoMoves, Stale };
+	enum class Reason { NoMoves, Stale, NoProgress };   // Stale = old repetition rule, kept so old CSV rows load
+
+	static char const* name(Reason r)
+	{
+		return r == Reason::Stale ? "Stale" : r == Reason::NoProgress ? "NoProgress" : "NoMoves";
+	}
+	static Reason parse(std::string const& s)
+	{
+		return s == "Stale" ? Reason::Stale : s == "NoProgress" ? Reason::NoProgress : Reason::NoMoves;
+	}
 
 	struct Record
 	{
@@ -31,7 +40,7 @@ public:
 			if (!r.winner) ++draws;
 			else if (*r.winner == game::Color::White) ++white;
 			else ++black;
-			if (r.reason == Reason::Stale) ++stale;
+			if (r.reason != Reason::NoMoves) ++stale;   // any draw ending (repetition or no progress)
 			plies_sum += r.plies;
 			plies_max = (std::max)(plies_max, r.plies);
 		}
@@ -75,7 +84,7 @@ public:
 			s << "game,winner,reason,plies,policy_loss,value_loss\n";
 		s << r.game << ','
 			<< (!r.winner ? 'D' : *r.winner == game::Color::White ? 'W' : 'B') << ','
-			<< (r.reason == Reason::Stale ? "Stale" : "NoMoves") << ','
+			<< name(r.reason) << ','
 			<< r.plies << ',' << r.policy_loss << ',' << r.value_loss << '\n';
 	}
 
@@ -97,7 +106,7 @@ public:
 				if (f[1] == "W") w = game::Color::White;
 				else if (f[1] == "B") w = game::Color::Black;
 
-				add({ std::stoull(f[0]), w, f[2] == "Stale" ? Reason::Stale : Reason::NoMoves,
+				add({ std::stoull(f[0]), w, parse(f[2]),
 					std::stoull(f[3]), std::stod(f[4]), std::stod(f[5]) });
 			}
 			catch (...) {}   // skip a damaged line
