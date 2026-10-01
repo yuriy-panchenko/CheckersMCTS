@@ -43,6 +43,7 @@ protected:
 	afx_msg BOOL OnEraseBkgnd(CDC* pDC);
 	afx_msg void OnSize(UINT nType, int cx, int cy);
 	afx_msg void OnLButtonDown(UINT nFlags, CPoint point);
+	afx_msg LRESULT OnAutoMove(WPARAM, LPARAM);
 	DECLARE_MESSAGE_MAP()
 
 private:
@@ -56,6 +57,8 @@ private:
 	CBrush m_brushWhite, m_brushBlack, m_brushQueenCenter;
 	CPen m_penSelect,m_penPossible;
 	game::Position m_Selected;
+public:
+	virtual void OnInitialUpdate();
 };
 
 #ifndef _DEBUG  // debug version in CheckersView.cpp

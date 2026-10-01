@@ -8,6 +8,7 @@
 #include "mcts.h"
 #include "CLearningThread.h"
 #include "GameStats.h"
+#define WM_AUTO_MOVE	(WM_USER+0x0002)
 
 class CCheckersDoc : public CDocument
 {

@@ -20,10 +20,10 @@
 #define new DEBUG_NEW
 #define SIMULATION_COUNT	(100)
 #else
-#define SIMULATION_COUNT	(1'000)
+#define SIMULATION_COUNT	(2'000)
 #endif
 
-#define TIMER_ELLAPLE	(100)
+#define TIMER_ELLAPLE	(50)
 #define LEARNING_RATE	(.3)
 #define STALE_COUNT		(3ull)
 #define NNET_FILENAME	_T("net.bin")
@@ -48,8 +48,6 @@ BEGIN_MESSAGE_MAP(CCheckersDoc, CDocument)
 	ON_UPDATE_COMMAND_UI(ID_WHITE_HUMAN, &CCheckersDoc::OnUpdateWhiteHuman)
 	ON_UPDATE_COMMAND_UI(IDS_INDICATOR_ADJUSTS, &CCheckersDoc::OnUpdateIdsIndicatorAdjusted)
 	ON_UPDATE_COMMAND_UI(IDS_INDICATOR_LEARNS, &CCheckersDoc::OnUpdateIdsIndicatorLearns)
-
-
 	ON_COMMAND(ID_START_LEARNING_THREAD, &CCheckersDoc::OnStartLearningThread)
 	ON_UPDATE_COMMAND_UI(ID_START_LEARNING_THREAD, &CCheckersDoc::OnUpdateStartLearningThread)
 	ON_COMMAND(ID_SHOCK, &CCheckersDoc::OnShock)
@@ -225,11 +223,16 @@ void CCheckersDoc::MakeMove(game::Move const& m)
 	//	TestEndOfGame
 	if (!m_PossibleMoves.empty() && Test4Stale())
 		//EndGame(!GetGame().WhoMakesTurn());
-		EndGame({},GameStats::Reason::Stale);
+		EndGame({}, GameStats::Reason::Stale);
 	else if (m_PossibleMoves.empty())
 		EndGame(!GetGame().WhoMakesTurn(), GameStats::Reason::NoMoves);
 	else if (!IsHuman(GetGame().WhoMakesTurn()))
-		m_idTimer = ::SetTimer(NULL, 0, TIMER_ELLAPLE, AutoMoveProc);
+	/*{
+		if (auto pFr{ (CMainFrame*)theApp.GetMainWnd() })
+			if (auto pView{ pFr->GetActiveView() })
+				pView->PostMessage(WM_AUTO_MOVE, 0, 0);
+	}*/
+	m_idTimer = ::SetTimer(NULL, 0, TIMER_ELLAPLE, AutoMoveProc);
 }
 
 void CCheckersDoc::AutoMove()
@@ -421,7 +424,7 @@ void CCheckersDoc::Dump(CDumpContext& dc) const
 }
 #endif //_DEBUG
 
-void CCheckersDoc::AutoMoveProc(HWND hWnd, UINT uMsg, UINT_PTR idEvent, DWORD dw)
+void CCheckersDoc::AutoMoveProc(HWND, UINT, UINT_PTR, DWORD)
 {
 	if (auto pDoc{ dynamic_cast<CCheckersDoc*>(theApp.GetDocument()) })
 	{
@@ -539,7 +542,7 @@ std::pair<double, double> CCheckersDoc::TrainOnSamples(std::optional<game::Color
 	}
 
 	//m_Net.adjust(LEARNING_RATE, m_Samples.size());
-	m_Net.adjust(LEARNING_RATE/m_Samples.size());
+	m_Net.adjust(LEARNING_RATE / m_Samples.size());
 
 	CString str;
 	str.Format(_T("%I64u: %s [ %I64u:%I64u ] %zu moves, avg policy loss=%.4f, avg value loss=%.4f, value=%.4f"),

@@ -31,6 +31,7 @@ BEGIN_MESSAGE_MAP(CCheckersView, CView)
 	ON_WM_ERASEBKGND()
 	ON_WM_SIZE()
 	ON_WM_LBUTTONDOWN()
+	ON_MESSAGE(WM_AUTO_MOVE, &OnAutoMove)
 END_MESSAGE_MAP()
 
 // CCheckersView construction/destruction
@@ -352,4 +353,17 @@ void CCheckersView::OnLButtonDown(UINT nFlags, CPoint point)
 		UpdatePicture();
 
 	//CView::OnLButtonDown(nFlags, point);
+}
+
+LRESULT CCheckersView::OnAutoMove(WPARAM, LPARAM)
+{
+	GetDocument()->AutoMove();
+	return 0;
+}
+
+void CCheckersView::OnInitialUpdate()
+{
+	CView::OnInitialUpdate();
+
+	//GetDocument()->MakeMove({});
 }
