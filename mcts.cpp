@@ -10,6 +10,7 @@ namespace mcts
 		, m_clbThink{ std::move(cb) }
 		, c_puct{ _c_puct }
 	{
+		m_Seen[initial_state.GetBoard().GetZipID()] = 1;
 	}
 
 	MCTS& MCTS::operator=(MCTS&& oth)
@@ -17,6 +18,7 @@ namespace mcts
 		root = std::move(oth.root);
 		m_clbThink = std::move(oth.m_clbThink);
 		c_puct = oth.c_puct;
+		m_Seen = std::move(oth.m_Seen);
 		return *this;
 	}
 
@@ -70,6 +72,7 @@ namespace mcts
 				root->quiet = quiet;
 			}
 		}
+		++m_Seen[root->state.GetBoard().GetZipID()];
 	}
 
 	double MCTS::expand(Node& node, std::vector<game::Move> const& legal_moves)
@@ -151,8 +154,25 @@ namespace mcts
 		auto& child{ *best.child };
 		bool const turn_passed{ child.state.WhoMakesTurn() != node.state.WhoMakesTurn() };
 
-		// No-progress limit reached: a draw. (Mid-chain nodes follow a capture, so their counter is 0.)
-		Outcome const out{ child.quiet >= no_progress_limit ? Outcome{ draw_value, true } : select_and_expand(child) };
+		Outcome out;
+		if (child.quiet >= no_progress_limit)
+			out = { draw_value, true };                     // no-progress limit reached (mid-chain nodes follow a capture, so their counter is 0)
+		else if (!turn_passed)
+			out = select_and_expand(child);                 // mid-chain jump: same player, nothing to count
+		else
+		{
+			auto const id{ child.state.GetBoard().GetZipID() };
+			if (seen(id) + 1 >= stale_limit)
+				out = { draw_value, true };                 // this would be the 3rd occurrence: a draw
+			else
+			{
+				++m_Seen[id];
+				out = select_and_expand(child);
+				auto const it{ m_Seen.find(id) };
+				if (--it->second == 0)
+					m_Seen.erase(it);                       // keep the map from growing with the tree
+			}
+		}
 
 		// Edge value from THIS node's mover's perspective.
 		// A draw is equally bad for both players, so it is never flipped; everything else flips when the turn passed.
@@ -167,6 +187,13 @@ namespace mcts
 	{
 		static std::mt19937 rng{ std::random_device{}() };
 		return std::gamma_distribution<double>(alpha, 1.0)(rng);
+	}
+
+	// real-game positions + positions on the current search path
+	size_t MCTS::seen(id::zip64 const& id) const
+	{
+		auto const it{ m_Seen.find(id) };
+		return it == m_Seen.end() ? 0 : it->second;
 	}
 
 	// A capture or a pawn move is irreversible progress and resets the counter; a quiet king move adds one ply.
