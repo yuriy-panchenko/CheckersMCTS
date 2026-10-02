@@ -24,7 +24,7 @@
 #endif
 
 #define TIMER_ELLAPLE	(50)
-#define LEARNING_RATE	(.12)
+#define LEARNING_RATE	(.2)
 //#define STALE_COUNT		(3ull)
 #define NNET_FILENAME	_T("net.bin")
 #define STATS_FILENAME	_T("games.csv")
@@ -224,7 +224,9 @@ void CCheckersDoc::MakeMove(game::Move const& m)
 	m_MaxRepeats = (std::max)(m_MaxRepeats, m_Tree.root_repeats());
 
 	//	TestEndOfGame
-	if (!m_PossibleMoves.empty() && m_Tree.root_repeats() >= MCTS::stale_limit)
+	if (!m_PossibleMoves.empty() && GetGame().GetBoard().GetZipID().is_king_vs_king())
+		EndGame({}, GameStats::Reason::KvK);
+	else if (!m_PossibleMoves.empty() && m_Tree.root_repeats() >= MCTS::stale_limit)
 		EndGame({}, GameStats::Reason::Stale);
 	else if (!m_PossibleMoves.empty() && m_Tree.root_quiet() >= MCTS::no_progress_limit)
 		EndGame({}, GameStats::Reason::NoProgress);

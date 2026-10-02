@@ -10,15 +10,15 @@
 class GameStats
 {
 public:
-	enum class Reason { NoMoves, Stale, NoProgress };   // Stale = old repetition rule, kept so old CSV rows load
+	enum class Reason { NoMoves, Stale, NoProgress, KvK };   // Stale = old repetition rule, kept so old CSV rows load
 
 	static char const* name(Reason r)
 	{
-		return r == Reason::Stale ? "Stale" : r == Reason::NoProgress ? "NoProgress" : "NoMoves";
+		return r == Reason::Stale ? "Stale" : r == Reason::NoProgress ? "NoProgress" : r == Reason::KvK ? "KvK" : "NoMoves";
 	}
 	static Reason parse(std::string const& s)
 	{
-		return s == "Stale" ? Reason::Stale : s == "NoProgress" ? Reason::NoProgress : Reason::NoMoves;
+		return s == "Stale" ? Reason::Stale : s == "NoProgress" ? Reason::NoProgress : s == "KvK" ? Reason::KvK : Reason::NoMoves;
 	}
 
 	struct Record
@@ -45,7 +45,7 @@ public:
 			if (!r.winner) ++draws;
 			else if (*r.winner == game::Color::White) ++white;
 			else ++black;
-			if (r.reason != Reason::NoMoves) ++stale;   // any draw ending (repetition or no progress)
+			if (r.reason != Reason::NoMoves) ++stale;   // any draw ending (repetition, no progress or king vs king)
 			plies_sum += r.plies;
 			plies_max = (std::max)(plies_max, r.plies);
 		}

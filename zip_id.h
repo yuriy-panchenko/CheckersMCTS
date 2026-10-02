@@ -54,5 +54,8 @@ namespace id
 		std::bitset<64> get_color()const { return color & location; }
 		std::bitset<64> get_rank()const { return rank & location; }
 		static bool is_dark_square(size_t index);
+
+		// Exactly one king per side and nothing else: a dead draw (no progress is possible for a competent player)
+		bool is_king_vs_king()const { return location.count() == 2 && (rank & location).count() == 2 && (color & location).count() == 1; }
 	};
 }
