@@ -92,26 +92,26 @@ namespace id
 	// Exactly one king per side and nothing else: a dead draw (no progress is possible for a competent player)
 	bool zip64::is_king_vs_king(int opp_king_count) const
 	{
-		if (opp_king_count == 1)
+		//if (opp_king_count == 1)
 			return location.count() == 2
 			&& (rank & location).count() == 2
 			&& (color & location).count() == 1;
-		else if (opp_king_count == 2)
-		{
-			//	both sides should have at least one king and 1 or less other figures
-			auto all{ location.count() };
-			if (all >= 2 && all <= 4)
-			{
-				auto white{ (color & location).count() }, black{ all - white };
-				if (white && black)
-				{
-					auto white_king{ (rank & location & color).count() }, black_king{ (rank & location).count() - white_king };
-					if (white_king && black_king)
-						return true;;
-				}
-			}
-		}
-		//else
-		return false;
+		//else if (opp_king_count == 2)
+		//{
+		//	//	both sides should have at least one king and 1 or less other figures
+		//	auto all{ location.count() };
+		//	if (all >= 2 && all <= 4)
+		//	{
+		//		auto white{ (color & location).count() }, black{ all - white };
+		//		if (white && black)
+		//		{
+		//			auto white_king{ (rank & location & color).count() }, black_king{ (rank & location).count() - white_king };
+		//			if (white_king && black_king)
+		//				return true;;
+		//		}
+		//	}
+		//}
+		////else
+		//return false;
 	}
 }
