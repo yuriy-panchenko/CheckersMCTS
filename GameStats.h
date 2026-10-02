@@ -10,15 +10,23 @@
 class GameStats
 {
 public:
-	enum class Reason { NoMoves, Stale, NoProgress, KvK };   // Stale = old repetition rule, kept so old CSV rows load
+	enum class Reason { NoMoves, Stale, NoProgress, KvK, KvKK, };   // Stale = old repetition rule, kept so old CSV rows load
 
 	static char const* name(Reason r)
 	{
-		return r == Reason::Stale ? "Stale" : r == Reason::NoProgress ? "NoProgress" : r == Reason::KvK ? "KvK" : "NoMoves";
+		switch (r)
+		{
+		case GameStats::Reason::NoMoves:		return "NoMoves";
+		case GameStats::Reason::Stale:			return "Stale";
+		case GameStats::Reason::NoProgress:	return "NoProgress";
+		case GameStats::Reason::KvK:			return "KvK";
+		case GameStats::Reason::KvKK:			return "KvKK";
+		default:									return "Unknown";
+		}
 	}
 	static Reason parse(std::string const& s)
 	{
-		return s == "Stale" ? Reason::Stale : s == "NoProgress" ? Reason::NoProgress : s == "KvK" ? Reason::KvK : Reason::NoMoves;
+		return s == "Stale" ? Reason::Stale : s == "NoProgress" ? Reason::NoProgress : s == "KvK" ? Reason::KvK : s == "KvKK" ? Reason::KvKK: Reason::NoMoves;
 	}
 
 	struct Record

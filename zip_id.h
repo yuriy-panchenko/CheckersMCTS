@@ -56,6 +56,6 @@ namespace id
 		static bool is_dark_square(size_t index);
 
 		// Exactly one king per side and nothing else: a dead draw (no progress is possible for a competent player)
-		bool is_king_vs_king()const { return location.count() == 2 && (rank & location).count() == 2 && (color & location).count() == 1; }
+		bool is_king_vs_king(int opp_king_count)const;
 	};
 }

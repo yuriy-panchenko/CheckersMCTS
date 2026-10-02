@@ -224,7 +224,9 @@ void CCheckersDoc::MakeMove(game::Move const& m)
 	m_MaxRepeats = (std::max)(m_MaxRepeats, m_Tree.root_repeats());
 
 	//	TestEndOfGame
-	if (!m_PossibleMoves.empty() && GetGame().GetBoard().GetZipID().is_king_vs_king())
+	if (!m_PossibleMoves.empty() && GetGame().GetBoard().GetZipID().is_king_vs_king(2))
+		EndGame({}, GameStats::Reason::KvKK);
+	if (!m_PossibleMoves.empty() && GetGame().GetBoard().GetZipID().is_king_vs_king(1))
 		EndGame({}, GameStats::Reason::KvK);
 	else if (!m_PossibleMoves.empty() && m_Tree.root_repeats() >= MCTS::stale_limit)
 		EndGame({}, GameStats::Reason::Stale);
