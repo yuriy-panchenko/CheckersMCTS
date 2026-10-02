@@ -24,7 +24,7 @@
 #endif
 
 #define TIMER_ELLAPLE	(50)
-#define LEARNING_RATE	(.05)
+#define LEARNING_RATE	(.12)
 //#define STALE_COUNT		(3ull)
 #define NNET_FILENAME	_T("net.bin")
 #define STATS_FILENAME	_T("games.csv")
@@ -220,6 +220,9 @@ void CCheckersDoc::MakeMove(game::Move const& m)
 	}
 	m_PossibleMoves = GetGame().GetAvailableMoves();
 
+	m_MaxQuiet = (std::max)(m_MaxQuiet, m_Tree.root_quiet());
+	m_MaxRepeats = (std::max)(m_MaxRepeats, m_Tree.root_repeats());
+
 	//	TestEndOfGame
 	if (!m_PossibleMoves.empty() && m_Tree.root_repeats() >= MCTS::stale_limit)
 		EndGame({}, GameStats::Reason::Stale);
@@ -245,7 +248,10 @@ void CCheckersDoc::AutoMove()
 
 	m_Samples.push_back(MakeSample());
 	if (m_Samples.size() == 1)
+	{
 		m_FirstValue = m_Net.value();
+		m_RootQ0 = m_Tree.root_value();
+	}
 	MakeMove(m_Tree.select_move());
 	UpdatePicture(FALSE);
 }
@@ -295,7 +301,7 @@ void CCheckersDoc::EndGame(std::optional<Color> winner, GameStats::Reason why)
 	size_t const plies{ m_Samples.size() };
 	auto const [ploss, vloss] = TrainOnSamples(winner);
 
-	GameStats::Record const rec{ m_Stats.games() + 1, winner, why, plies, ploss, vloss };
+	GameStats::Record const rec{ m_Stats.games() + 1, winner, why, plies, ploss, vloss, m_MaxQuiet, m_MaxRepeats, m_RootQ0 };
 	m_Stats.add(rec);
 	GameStats::append_csv(STATS_FILENAME, rec);
 	static_cast<CMainFrame*>(theApp.GetMainWnd())->GetOutputWnd().SetSummary(m_Stats.summary());
@@ -328,6 +334,9 @@ BOOL CCheckersDoc::OnNewDocument()
 		return FALSE;
 
 	m_FirstValue = .0;
+	m_MaxQuiet = 0;
+	m_MaxRepeats = 0;
+	m_RootQ0 = .0;
 
 	if (m_idTimer && ::KillTimer(NULL, m_idTimer))
 		m_idTimer = 0;

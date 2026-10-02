@@ -1,0 +1,118 @@
+diff --git a/CheckersDoc.cpp b/CheckersDoc.cpp
+index ebec0a7..1208660 100644
+--- a/CheckersDoc.cpp
++++ b/CheckersDoc.cpp
+@@ -246,12 +246,13 @@ void CCheckersDoc::AutoMove()
+ 
+ 	m_Tree.add_root_noise();
+ 
++	double const q{ m_Tree.root_value() };   // mover's view; the last one logged belongs to the player who made the final move
++	m_QAbsMax = (std::max)(m_QAbsMax, std::abs(q));
++	m_QLast = q;
++
+ 	m_Samples.push_back(MakeSample());
+ 	if (m_Samples.size() == 1)
+-	{
+ 		m_FirstValue = m_Net.value();
+-		m_RootQ0 = m_Tree.root_value();
+-	}
+ 	MakeMove(m_Tree.select_move());
+ 	UpdatePicture(FALSE);
+ }
+@@ -301,7 +302,18 @@ void CCheckersDoc::EndGame(std::optional<Color> winner, GameStats::Reason why)
+ 	size_t const plies{ m_Samples.size() };
+ 	auto const [ploss, vloss] = TrainOnSamples(winner);
+ 
+-	GameStats::Record const rec{ m_Stats.games() + 1, winner, why, plies, ploss, vloss, m_MaxQuiet, m_MaxRepeats, m_RootQ0 };
++	auto const count{ [&](Color c)
++		{
++			int men{}, kings{};
++			for (auto const& [p, pos] : GetGame().GetBoard().GetPieces(c))
++				(p.rank == Rank::Queen ? kings : men)++;
++			return std::pair{ men, kings };
++		} };
++	auto const [menW, kingW] = count(Color::White);
++	auto const [menB, kingB] = count(Color::Black);
++
++	GameStats::Record const rec{ m_Stats.games() + 1, winner, why, plies, ploss, vloss,
++		m_MaxQuiet, m_MaxRepeats, m_QAbsMax, m_QLast, menW, kingW, menB, kingB };
+ 	m_Stats.add(rec);
+ 	GameStats::append_csv(STATS_FILENAME, rec);
+ 	static_cast<CMainFrame*>(theApp.GetMainWnd())->GetOutputWnd().SetSummary(m_Stats.summary());
+@@ -336,7 +348,8 @@ BOOL CCheckersDoc::OnNewDocument()
+ 	m_FirstValue = .0;
+ 	m_MaxQuiet = 0;
+ 	m_MaxRepeats = 0;
+-	m_RootQ0 = .0;
++	m_QAbsMax = .0;
++	m_QLast = .0;
+ 
+ 	if (m_idTimer && ::KillTimer(NULL, m_idTimer))
+ 		m_idTimer = 0;
+diff --git a/CheckersDoc.h b/CheckersDoc.h
+index 2058848..4d94756 100644
+--- a/CheckersDoc.h
++++ b/CheckersDoc.h
+@@ -100,6 +100,6 @@ private:
+ 	double m_FirstValue;
+ 	int m_MaxQuiet;          // per-game diagnostics for games.csv
+ 	size_t m_MaxRepeats;
+-	double m_RootQ0;
++	double m_QAbsMax, m_QLast;   // largest |root value| in the game; root value at the final move
+ 	CLearningThread* m_pLearnTh;
+ };
+diff --git a/GameStats.h b/GameStats.h
+index 1768eff..f29351e 100644
+--- a/GameStats.h
++++ b/GameStats.h
+@@ -30,7 +30,9 @@ public:
+ 		double policy_loss, value_loss;
+ 		int max_quiet{};                     // highest no-progress counter reached
+ 		size_t max_repeats{};                // highest occurrence count of any position (3 = repetition draw)
+-		double root_q0{};                    // root value estimate at the first move, mover's view
++		double q_absmax{};                   // largest |root value| over the game
++		double q_last{};                     // root value at the final move (mover = the player who made it)
++		int men_w{}, kings_w{}, men_b{}, kings_b{};   // pieces on the board when the game ended
+ 	};
+ 
+ 	struct Tally
+@@ -84,12 +86,13 @@ public:
+ 		if (!s)
+ 			return;
+ 		if (fresh)
+-			s << "game,winner,reason,plies,policy_loss,value_loss,max_quiet,max_repeats,root_q0\n";
++			s << "game,winner,reason,plies,policy_loss,value_loss,max_quiet,max_repeats,q_absmax,q_last,men_w,kings_w,men_b,kings_b\n";
+ 		s << r.game << ','
+ 			<< (!r.winner ? 'D' : *r.winner == game::Color::White ? 'W' : 'B') << ','
+ 			<< name(r.reason) << ','
+ 			<< r.plies << ',' << r.policy_loss << ',' << r.value_loss << ','
+-			<< r.max_quiet << ',' << r.max_repeats << ',' << r.root_q0 << '\n';
++			<< r.max_quiet << ',' << r.max_repeats << ',' << r.q_absmax << ',' << r.q_last << ','
++			<< r.men_w << ',' << r.kings_w << ',' << r.men_b << ',' << r.kings_b << '\n';
+ 	}
+ 
+ 	// Rebuild counters after a restart (net.bin persists, so the stats should too)
+@@ -101,7 +104,7 @@ public:
+ 		while (std::getline(s, line))
+ 		{
+ 			std::istringstream ls{ line };
+-			std::string f[9];
++			std::string f[14];
+ 			for (auto& x : f)
+ 				std::getline(ls, x, ',');
+ 			try
+@@ -110,11 +113,12 @@ public:
+ 				if (f[1] == "W") w = game::Color::White;
+ 				else if (f[1] == "B") w = game::Color::Black;
+ 
+-				// the last three columns are missing in rows written by older versions
++				// the columns after value_loss are missing in rows written by older versions
+ 				auto const opt{ [](std::string const& x) { return x.empty() ? 0. : std::stod(x); } };
+ 				add({ std::stoull(f[0]), w, parse(f[2]),
+ 					std::stoull(f[3]), std::stod(f[4]), std::stod(f[5]),
+-					int(opt(f[6])), size_t(opt(f[7])), opt(f[8]) });
++					int(opt(f[6])), size_t(opt(f[7])), opt(f[8]), opt(f[9]),
++					int(opt(f[10])), int(opt(f[11])), int(opt(f[12])), int(opt(f[13])) });
+ 			}
+ 			catch (...) {}   // skip a damaged line
+ 		}

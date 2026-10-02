@@ -98,5 +98,8 @@ private:
 	NNet m_Net;
 	std::vector<Sample> m_Samples;
 	double m_FirstValue;
+	int m_MaxQuiet;          // per-game diagnostics for games.csv
+	size_t m_MaxRepeats;
+	double m_RootQ0;
 	CLearningThread* m_pLearnTh;
 };

@@ -55,6 +55,15 @@ namespace mcts
 		void add_root_noise(double alpha = .3, double eps = .25);
 		int root_quiet() const { return root->quiet; }
 		size_t root_repeats() const { return seen(root->state.GetBoard().GetZipID()); }
+		// Visit-weighted mean backed-up value of the root edges, from the mover's perspective (0 if nothing visited)
+		double root_value() const
+		{
+			double w{};
+			int n{};
+			for (auto const& e : root->edges)
+				w += e.BackedUp, n += e.Visits;
+			return n ? w / n : .0;
+		}
 
 	private:
 		// v is from the perspective of the player to move at the node; draw is set when the line ends in a repetition draw

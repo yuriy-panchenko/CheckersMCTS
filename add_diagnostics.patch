@@ -1,0 +1,128 @@
+diff --git a/CheckersDoc.cpp b/CheckersDoc.cpp
+index e8f311b..ebec0a7 100644
+--- a/CheckersDoc.cpp
++++ b/CheckersDoc.cpp
+@@ -220,6 +220,9 @@ void CCheckersDoc::MakeMove(game::Move const& m)
+ 	}
+ 	m_PossibleMoves = GetGame().GetAvailableMoves();
+ 
++	m_MaxQuiet = (std::max)(m_MaxQuiet, m_Tree.root_quiet());
++	m_MaxRepeats = (std::max)(m_MaxRepeats, m_Tree.root_repeats());
++
+ 	//	TestEndOfGame
+ 	if (!m_PossibleMoves.empty() && m_Tree.root_repeats() >= MCTS::stale_limit)
+ 		EndGame({}, GameStats::Reason::Stale);
+@@ -245,7 +248,10 @@ void CCheckersDoc::AutoMove()
+ 
+ 	m_Samples.push_back(MakeSample());
+ 	if (m_Samples.size() == 1)
++	{
+ 		m_FirstValue = m_Net.value();
++		m_RootQ0 = m_Tree.root_value();
++	}
+ 	MakeMove(m_Tree.select_move());
+ 	UpdatePicture(FALSE);
+ }
+@@ -295,7 +301,7 @@ void CCheckersDoc::EndGame(std::optional<Color> winner, GameStats::Reason why)
+ 	size_t const plies{ m_Samples.size() };
+ 	auto const [ploss, vloss] = TrainOnSamples(winner);
+ 
+-	GameStats::Record const rec{ m_Stats.games() + 1, winner, why, plies, ploss, vloss };
++	GameStats::Record const rec{ m_Stats.games() + 1, winner, why, plies, ploss, vloss, m_MaxQuiet, m_MaxRepeats, m_RootQ0 };
+ 	m_Stats.add(rec);
+ 	GameStats::append_csv(STATS_FILENAME, rec);
+ 	static_cast<CMainFrame*>(theApp.GetMainWnd())->GetOutputWnd().SetSummary(m_Stats.summary());
+@@ -328,6 +334,9 @@ BOOL CCheckersDoc::OnNewDocument()
+ 		return FALSE;
+ 
+ 	m_FirstValue = .0;
++	m_MaxQuiet = 0;
++	m_MaxRepeats = 0;
++	m_RootQ0 = .0;
+ 
+ 	if (m_idTimer && ::KillTimer(NULL, m_idTimer))
+ 		m_idTimer = 0;
+diff --git a/CheckersDoc.h b/CheckersDoc.h
+index 89888fb..2058848 100644
+--- a/CheckersDoc.h
++++ b/CheckersDoc.h
+@@ -98,5 +98,8 @@ private:
+ 	NNet m_Net;
+ 	std::vector<Sample> m_Samples;
+ 	double m_FirstValue;
++	int m_MaxQuiet;          // per-game diagnostics for games.csv
++	size_t m_MaxRepeats;
++	double m_RootQ0;
+ 	CLearningThread* m_pLearnTh;
+ };
+diff --git a/GameStats.h b/GameStats.h
+index 0e80f25..1768eff 100644
+--- a/GameStats.h
++++ b/GameStats.h
+@@ -28,6 +28,9 @@ public:
+ 		Reason reason;
+ 		size_t plies;                        // both sides' turns
+ 		double policy_loss, value_loss;
++		int max_quiet{};                     // highest no-progress counter reached
++		size_t max_repeats{};                // highest occurrence count of any position (3 = repetition draw)
++		double root_q0{};                    // root value estimate at the first move, mover's view
+ 	};
+ 
+ 	struct Tally
+@@ -81,11 +84,12 @@ public:
+ 		if (!s)
+ 			return;
+ 		if (fresh)
+-			s << "game,winner,reason,plies,policy_loss,value_loss\n";
++			s << "game,winner,reason,plies,policy_loss,value_loss,max_quiet,max_repeats,root_q0\n";
+ 		s << r.game << ','
+ 			<< (!r.winner ? 'D' : *r.winner == game::Color::White ? 'W' : 'B') << ','
+ 			<< name(r.reason) << ','
+-			<< r.plies << ',' << r.policy_loss << ',' << r.value_loss << '\n';
++			<< r.plies << ',' << r.policy_loss << ',' << r.value_loss << ','
++			<< r.max_quiet << ',' << r.max_repeats << ',' << r.root_q0 << '\n';
+ 	}
+ 
+ 	// Rebuild counters after a restart (net.bin persists, so the stats should too)
+@@ -97,7 +101,7 @@ public:
+ 		while (std::getline(s, line))
+ 		{
+ 			std::istringstream ls{ line };
+-			std::string f[6];
++			std::string f[9];
+ 			for (auto& x : f)
+ 				std::getline(ls, x, ',');
+ 			try
+@@ -106,8 +110,11 @@ public:
+ 				if (f[1] == "W") w = game::Color::White;
+ 				else if (f[1] == "B") w = game::Color::Black;
+ 
++				// the last three columns are missing in rows written by older versions
++				auto const opt{ [](std::string const& x) { return x.empty() ? 0. : std::stod(x); } };
+ 				add({ std::stoull(f[0]), w, parse(f[2]),
+-					std::stoull(f[3]), std::stod(f[4]), std::stod(f[5]) });
++					std::stoull(f[3]), std::stod(f[4]), std::stod(f[5]),
++					int(opt(f[6])), size_t(opt(f[7])), opt(f[8]) });
+ 			}
+ 			catch (...) {}   // skip a damaged line
+ 		}
+diff --git a/mcts.h b/mcts.h
+index acb419b..eb4e7c9 100644
+--- a/mcts.h
++++ b/mcts.h
+@@ -55,6 +55,15 @@ namespace mcts
+ 		void add_root_noise(double alpha = .3, double eps = .25);
+ 		int root_quiet() const { return root->quiet; }
+ 		size_t root_repeats() const { return seen(root->state.GetBoard().GetZipID()); }
++		// Visit-weighted mean backed-up value of the root edges, from the mover's perspective (0 if nothing visited)
++		double root_value() const
++		{
++			double w{};
++			int n{};
++			for (auto const& e : root->edges)
++				w += e.BackedUp, n += e.Visits;
++			return n ? w / n : .0;
++		}
+ 
+ 	private:
+ 		// v is from the perspective of the player to move at the node; draw is set when the line ends in a repetition draw

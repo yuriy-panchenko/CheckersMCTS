@@ -28,6 +28,9 @@ public:
 		Reason reason;
 		size_t plies;                        // both sides' turns
 		double policy_loss, value_loss;
+		int max_quiet{};                     // highest no-progress counter reached
+		size_t max_repeats{};                // highest occurrence count of any position (3 = repetition draw)
+		double root_q0{};                    // root value estimate at the first move, mover's view
 	};
 
 	struct Tally
@@ -81,11 +84,12 @@ public:
 		if (!s)
 			return;
 		if (fresh)
-			s << "game,winner,reason,plies,policy_loss,value_loss\n";
+			s << "game,winner,reason,plies,policy_loss,value_loss,max_quiet,max_repeats,root_q0\n";
 		s << r.game << ','
 			<< (!r.winner ? 'D' : *r.winner == game::Color::White ? 'W' : 'B') << ','
 			<< name(r.reason) << ','
-			<< r.plies << ',' << r.policy_loss << ',' << r.value_loss << '\n';
+			<< r.plies << ',' << r.policy_loss << ',' << r.value_loss << ','
+			<< r.max_quiet << ',' << r.max_repeats << ',' << r.root_q0 << '\n';
 	}
 
 	// Rebuild counters after a restart (net.bin persists, so the stats should too)
@@ -97,7 +101,7 @@ public:
 		while (std::getline(s, line))
 		{
 			std::istringstream ls{ line };
-			std::string f[6];
+			std::string f[9];
 			for (auto& x : f)
 				std::getline(ls, x, ',');
 			try
@@ -106,8 +110,11 @@ public:
 				if (f[1] == "W") w = game::Color::White;
 				else if (f[1] == "B") w = game::Color::Black;
 
+				// the last three columns are missing in rows written by older versions
+				auto const opt{ [](std::string const& x) { return x.empty() ? 0. : std::stod(x); } };
 				add({ std::stoull(f[0]), w, parse(f[2]),
-					std::stoull(f[3]), std::stod(f[4]), std::stod(f[5]) });
+					std::stoull(f[3]), std::stod(f[4]), std::stod(f[5]),
+					int(opt(f[6])), size_t(opt(f[7])), opt(f[8]) });
 			}
 			catch (...) {}   // skip a damaged line
 		}
