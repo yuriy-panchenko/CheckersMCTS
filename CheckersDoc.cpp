@@ -246,12 +246,13 @@ void CCheckersDoc::AutoMove()
 
 	m_Tree.add_root_noise();
 
+	double const q{ m_Tree.root_value() };   // mover's view; the last one logged belongs to the player who made the final move
+	m_QAbsMax = (std::max)(m_QAbsMax, std::abs(q));
+	m_QLast = q;
+
 	m_Samples.push_back(MakeSample());
 	if (m_Samples.size() == 1)
-	{
 		m_FirstValue = m_Net.value();
-		m_RootQ0 = m_Tree.root_value();
-	}
 	MakeMove(m_Tree.select_move());
 	UpdatePicture(FALSE);
 }
@@ -301,7 +302,18 @@ void CCheckersDoc::EndGame(std::optional<Color> winner, GameStats::Reason why)
 	size_t const plies{ m_Samples.size() };
 	auto const [ploss, vloss] = TrainOnSamples(winner);
 
-	GameStats::Record const rec{ m_Stats.games() + 1, winner, why, plies, ploss, vloss, m_MaxQuiet, m_MaxRepeats, m_RootQ0 };
+	auto const count{ [&](Color c)
+		{
+			int men{}, kings{};
+			for (auto const& [p, pos] : GetGame().GetBoard().GetPieces(c))
+				(p.rank == Rank::Queen ? kings : men)++;
+			return std::pair{ men, kings };
+		} };
+	auto const [menW, kingW] = count(Color::White);
+	auto const [menB, kingB] = count(Color::Black);
+
+	GameStats::Record const rec{ m_Stats.games() + 1, winner, why, plies, ploss, vloss,
+		m_MaxQuiet, m_MaxRepeats, m_QAbsMax, m_QLast, menW, kingW, menB, kingB };
 	m_Stats.add(rec);
 	GameStats::append_csv(STATS_FILENAME, rec);
 	static_cast<CMainFrame*>(theApp.GetMainWnd())->GetOutputWnd().SetSummary(m_Stats.summary());
@@ -336,7 +348,8 @@ BOOL CCheckersDoc::OnNewDocument()
 	m_FirstValue = .0;
 	m_MaxQuiet = 0;
 	m_MaxRepeats = 0;
-	m_RootQ0 = .0;
+	m_QAbsMax = .0;
+	m_QLast = .0;
 
 	if (m_idTimer && ::KillTimer(NULL, m_idTimer))
 		m_idTimer = 0;

@@ -100,6 +100,6 @@ private:
 	double m_FirstValue;
 	int m_MaxQuiet;          // per-game diagnostics for games.csv
 	size_t m_MaxRepeats;
-	double m_RootQ0;
+	double m_QAbsMax, m_QLast;   // largest |root value| in the game; root value at the final move
 	CLearningThread* m_pLearnTh;
 };
