@@ -36,7 +36,7 @@ namespace mcts
 		using out_nnet = std::pair<vdb, double>;
 		using callback = std::function<out_nnet(vdb const&)>;
 		static constexpr size_t stale_limit{ 3 };       // same board seen this many times => draw
-		static constexpr int no_progress_limit{ 40 };   // plies (20 moves per side) with no capture and no pawn move => draw
+		static constexpr int no_progress_limit{ 30 };   // plies (20 moves per side) with no capture and no pawn move => draw
 		// Value of a draw for EACH player (not a signed value: it must not be negated when backing up).
 		static constexpr double draw_value{ -.1 };
 	public:

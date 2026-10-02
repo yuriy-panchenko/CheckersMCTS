@@ -1,0 +1,76 @@
+diff --git a/CheckersDoc.cpp b/CheckersDoc.cpp
+index d284693..7a8fd3d 100644
+--- a/CheckersDoc.cpp
++++ b/CheckersDoc.cpp
+@@ -224,7 +224,9 @@ void CCheckersDoc::MakeMove(game::Move const& m)
+ 	m_MaxRepeats = (std::max)(m_MaxRepeats, m_Tree.root_repeats());
+ 
+ 	//	TestEndOfGame
+-	if (!m_PossibleMoves.empty() && m_Tree.root_repeats() >= MCTS::stale_limit)
++	if (!m_PossibleMoves.empty() && GetGame().GetBoard().GetZipID().is_king_vs_king())
++		EndGame({}, GameStats::Reason::KvK);
++	else if (!m_PossibleMoves.empty() && m_Tree.root_repeats() >= MCTS::stale_limit)
+ 		EndGame({}, GameStats::Reason::Stale);
+ 	else if (!m_PossibleMoves.empty() && m_Tree.root_quiet() >= MCTS::no_progress_limit)
+ 		EndGame({}, GameStats::Reason::NoProgress);
+diff --git a/GameStats.h b/GameStats.h
+index f29351e..ef5f7a9 100644
+--- a/GameStats.h
++++ b/GameStats.h
+@@ -10,15 +10,15 @@
+ class GameStats
+ {
+ public:
+-	enum class Reason { NoMoves, Stale, NoProgress };   // Stale = old repetition rule, kept so old CSV rows load
++	enum class Reason { NoMoves, Stale, NoProgress, KvK };   // Stale = old repetition rule, kept so old CSV rows load
+ 
+ 	static char const* name(Reason r)
+ 	{
+-		return r == Reason::Stale ? "Stale" : r == Reason::NoProgress ? "NoProgress" : "NoMoves";
++		return r == Reason::Stale ? "Stale" : r == Reason::NoProgress ? "NoProgress" : r == Reason::KvK ? "KvK" : "NoMoves";
+ 	}
+ 	static Reason parse(std::string const& s)
+ 	{
+-		return s == "Stale" ? Reason::Stale : s == "NoProgress" ? Reason::NoProgress : Reason::NoMoves;
++		return s == "Stale" ? Reason::Stale : s == "NoProgress" ? Reason::NoProgress : s == "KvK" ? Reason::KvK : Reason::NoMoves;
+ 	}
+ 
+ 	struct Record
+@@ -45,7 +45,7 @@ public:
+ 			if (!r.winner) ++draws;
+ 			else if (*r.winner == game::Color::White) ++white;
+ 			else ++black;
+-			if (r.reason != Reason::NoMoves) ++stale;   // any draw ending (repetition or no progress)
++			if (r.reason != Reason::NoMoves) ++stale;   // any draw ending (repetition, no progress or king vs king)
+ 			plies_sum += r.plies;
+ 			plies_max = (std::max)(plies_max, r.plies);
+ 		}
+diff --git a/mcts.cpp b/mcts.cpp
+index 349ed8f..e4e6795 100644
+--- a/mcts.cpp
++++ b/mcts.cpp
+@@ -162,8 +162,8 @@ namespace mcts
+ 		else
+ 		{
+ 			auto const id{ child.state.GetBoard().GetZipID() };
+-			if (seen(id) + 1 >= stale_limit)
+-				out = { draw_value, true };                 // this would be the 3rd occurrence: a draw
++			if (id.is_king_vs_king() || seen(id) + 1 >= stale_limit)
++				out = { draw_value, true };                 // king vs king, or this would be the 3rd occurrence: a draw
+ 			else
+ 			{
+ 				++m_Seen[id];
+diff --git a/zip_id.h b/zip_id.h
+index e28b86f..d0e92df 100644
+--- a/zip_id.h
++++ b/zip_id.h
+@@ -54,5 +54,8 @@ namespace id
+ 		std::bitset<64> get_color()const { return color & location; }
+ 		std::bitset<64> get_rank()const { return rank & location; }
+ 		static bool is_dark_square(size_t index);
++
++		// Exactly one king per side and nothing else: a dead draw (no progress is possible for a competent player)
++		bool is_king_vs_king()const { return location.count() == 2 && (rank & location).count() == 2 && (color & location).count() == 1; }
+ 	};
+ }
+\ No newline at end of file
