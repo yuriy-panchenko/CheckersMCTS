@@ -245,10 +245,10 @@ void CCheckersDoc::MakeMove(game::Move const& m)
 
 void CCheckersDoc::AutoMove()
 {
-	for (size_t i = 0; i < SIMULATION_COUNT; ++i)
+	m_Tree.run_simulation();    // expands a fresh root, so the noise below has edges to act on
+	m_Tree.add_root_noise();    // exploration noise must be in place BEFORE the search it is meant to shape
+	for (size_t i = 1; i < SIMULATION_COUNT; ++i)
 		m_Tree.run_simulation();
-
-	m_Tree.add_root_noise();
 
 	double const q{ m_Tree.root_value() };   // mover's view; the last one logged belongs to the player who made the final move
 	m_QAbsMax = (std::max)(m_QAbsMax, std::abs(q));

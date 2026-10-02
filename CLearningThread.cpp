@@ -123,10 +123,10 @@ void CLearningThread::EndGame(std::optional<game::Color> winner)
 
 void CLearningThread::OnNextMove(WPARAM, LPARAM)
 {
-	for (size_t i = 0; i < SIMULATION_COUNT; ++i)
+	m_Tree.run_simulation();    // expands a fresh root, so the noise below has edges to act on
+	m_Tree.add_root_noise();    // exploration noise must be in place BEFORE the search it is meant to shape
+	for (size_t i = 1; i < SIMULATION_COUNT; ++i)
 		m_Tree.run_simulation();
-
-	m_Tree.add_root_noise();
 
 	m_Samples.push_back(MakeSample());
 	MakeMove(m_Tree.select_move());
