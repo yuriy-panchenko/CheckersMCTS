@@ -21,6 +21,19 @@ constexpr auto
 min_text_height{ 18 },
 min_text_width{ 20 };
 
+struct col
+{
+	static const
+		COLORREF
+		light_squares = RGB(240, 217, 181),		// cream
+		dark_squares = RGB(181, 136, 99),		// brown
+		white_piece = RGB(248, 244, 232),		// ivory
+		black_piece = RGB(48, 46, 52),		// charcoal
+		king_center = RGB(212, 160, 23),		// gold, which shows on both ivory and charcoal
+		selected_square = RGB(30, 144, 255),	// blue
+		possible_moves = RGB(60, 179, 113);		// green, which no longer clashes with any piece
+};
+
 // CCheckersView
 
 IMPLEMENT_DYNCREATE(CCheckersView, CView)
@@ -37,11 +50,11 @@ END_MESSAGE_MAP()
 // CCheckersView construction/destruction
 
 CCheckersView::CCheckersView() noexcept
-	:m_brushWhite{ RGB(180,20,20) }
-	, m_brushBlack{ RGB(20,180,20) }
-	, m_brushQueenCenter{ RGB(20,20,180) }
-	, m_penSelect{ PS_SOLID,3,RGB(220,220,20) }
-	, m_penPossible{ PS_SOLID,3,RGB(20,220,20) }
+	:m_brushWhite{ col::white_piece }
+	, m_brushBlack{ col::black_piece }
+	, m_brushQueenCenter{ col::king_center }
+	, m_penSelect{ PS_SOLID, 3, col::selected_square }
+	, m_penPossible{ PS_SOLID, 3, col::possible_moves }
 {
 	// TODO: add construction code here
 
@@ -221,7 +234,7 @@ void CCheckersView::DrawCanvas(CDC& dc)
 			r.top = m_rBoard.top + int(pos.row * m_rBoard.Width() / 8.);
 			r.bottom = m_rBoard.top + int((pos.row + 1) * m_rBoard.Width() / 8.);
 			r.DeflateRect(1, 1);
-			dc.FillSolidRect(r, pos.is_white() ? RGB(255, 255, 255) : RGB(0, 0, 0));
+			dc.FillSolidRect(r, pos.is_white() ? col::light_squares : col::dark_squares);
 			if (pos == m_Selected)
 			{
 				auto oldPen{ dc.SelectObject(m_penSelect) };
