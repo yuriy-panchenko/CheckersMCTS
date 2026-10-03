@@ -286,7 +286,8 @@ void CCheckersView::DrawCanvas(CDC& dc)
 							break;
 						}
 						else
-							dc.Ellipse(r);
+							//dc.Ellipse(r)
+							;
 						oldR = r;
 					} while (true);
 				}

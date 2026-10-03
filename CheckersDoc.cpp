@@ -67,8 +67,8 @@ CCheckersDoc::CCheckersDoc() noexcept
 	, m_uMoveCount{}
 	, m_winWhite{}
 	, m_winBlack{}
-, m_Tree{ Checkers{ Color::White }, { [this](auto const& inp) {return F1(inp); }} }
-, m_pLearnTh{ nullptr }
+	, m_Tree{ Checkers{ Color::White }, { [this](auto const& inp) {return F1(inp); }} }
+	, m_pLearnTh{ nullptr }
 {
 	class ms_timer
 	{
@@ -224,9 +224,9 @@ void CCheckersDoc::MakeMove(game::Move const& m)
 	m_MaxRepeats = (std::max)(m_MaxRepeats, m_Tree.root_repeats());
 
 	//	TestEndOfGame
-	if (!m_PossibleMoves.empty() && GetGame().GetBoard().GetZipID().is_king_vs_king(2))
-		EndGame({}, GameStats::Reason::KvKK);
-	if (!m_PossibleMoves.empty() && GetGame().GetBoard().GetZipID().is_king_vs_king(1))
+	//if (!m_PossibleMoves.empty() && GetGame().GetBoard().GetZipID().is_king_vs_king(2))
+		//EndGame({}, GameStats::Reason::KvKK);
+	if (!m_PossibleMoves.empty() && GetGame().GetBoard().GetZipID().is_king_vs_king())
 		EndGame({}, GameStats::Reason::KvK);
 	else if (!m_PossibleMoves.empty() && m_Tree.root_repeats() >= MCTS::stale_limit)
 		EndGame({}, GameStats::Reason::Stale);
@@ -246,7 +246,7 @@ void CCheckersDoc::MakeMove(game::Move const& m)
 void CCheckersDoc::AutoMove()
 {
 	m_Tree.run_simulation();    // expands a fresh root, so the noise below has edges to act on
-	m_Tree.add_root_noise();    // exploration noise must be in place BEFORE the search it is meant to shape
+	//m_Tree.add_root_noise();    // exploration noise must be in place BEFORE the search it is meant to shape
 	for (size_t i = 1; i < SIMULATION_COUNT; ++i)
 		m_Tree.run_simulation();
 

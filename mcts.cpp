@@ -162,7 +162,7 @@ namespace mcts
 		else
 		{
 			auto const id{ child.state.GetBoard().GetZipID() };
-			if (id.is_king_vs_king(1) || id.is_king_vs_king(2) || seen(id) + 1 >= stale_limit)
+			if (id.is_king_vs_king() /*|| id.is_king_vs_king(2) */|| seen(id) + 1 >= stale_limit)
 				out = { draw_value, true };                 // king vs king, or this would be the 3rd occurrence: a draw
 			else
 			{
