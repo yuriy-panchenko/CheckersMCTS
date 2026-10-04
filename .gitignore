@@ -362,7 +362,6 @@ MigrationBackup/
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
 /chart.bin
-/games.csv
 /net.bin
 /temp/chart.bin
 /temp/games.csv
