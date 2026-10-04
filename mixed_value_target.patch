@@ -1,0 +1,71 @@
+diff --git a/Checkers.h b/Checkers.h
+index b6934b1..ffed4dd 100644
+--- a/Checkers.h
++++ b/Checkers.h
+@@ -20,7 +20,8 @@ struct Sample
+ 	std::vector<double> board;                  // state.encode_board(), from mover's perspective
+ 	std::unordered_set<size_t> legal_indices;
+ 	std::vector<double> target_policy;          // size 896, visit_distribution: N_i / ΣN over root edges, 0 elsewhere
+-	double real_value = .0;
++	double real_value = .0;                     // value TARGET used for training (mix of outcome and material)
++	double outcome = .0;                        // pure game outcome from mover's perspective, kept only for reporting
+ };
+ 
+ class CCheckersApp : public CWinAppEx
+diff --git a/CheckersDoc.cpp b/CheckersDoc.cpp
+index 09da7c7..57d6ac0 100644
+--- a/CheckersDoc.cpp
++++ b/CheckersDoc.cpp
+@@ -25,6 +25,10 @@
+ 
+ #define TIMER_ELLAPLE	(50)
+ #define LEARNING_RATE	(.2)
++// value target = lambda*outcome + (1-lambda)*tanh(material/MATERIAL_SCALE); lambda ramps up so material fades out
++#define VALUE_MIX_START	(.3)
++#define VALUE_MIX_GAMES	(1500.)
++#define MATERIAL_SCALE	(4.)
+ //#define STALE_COUNT		(3ull)
+ #define NNET_FILENAME	_T("net.bin")
+ #define STATS_FILENAME	_T("games.csv")
+@@ -284,6 +288,18 @@ Sample CCheckersDoc::MakeSample()const
+ 	return rec;
+ }
+ 
++// material balance from the mover's point of view; board = 32 dark squares x { own man, own king, opp man, opp king }
++static double material_balance(std::vector<double> const& b)
++{
++	double own{}, opp{};
++	for (size_t i = 0; i + 3 < b.size(); i += 4)
++	{
++		own += b[i] + 2. * b[i + 1];
++		opp += b[i + 2] + 2. * b[i + 3];
++	}
++	return own - opp;
++}
++
+ void CCheckersDoc::EndGame(std::optional<Color> winner, GameStats::Reason why)
+ {
+ 	UpdatePicture(TRUE);
+@@ -300,8 +316,12 @@ void CCheckersDoc::EndGame(std::optional<Color> winner, GameStats::Reason why)
+ 		AfxMessageBox(str);
+ 	}
+ 
++	double const lambda{ (std::min)(1., VALUE_MIX_START + (1. - VALUE_MIX_START) * double(m_Stats.games()) / VALUE_MIX_GAMES) };
+ 	for (auto& sam : m_Samples)
+-		sam.real_value = winner ? sam.mover == *winner ? 1. : -1. : MCTS::draw_value;
++	{
++		sam.outcome = winner ? sam.mover == *winner ? 1. : -1. : MCTS::draw_value;
++		sam.real_value = lambda * sam.outcome + (1. - lambda) * std::tanh(material_balance(sam.board) / MATERIAL_SCALE);
++	}
+ 
+ 	size_t const plies{ m_Samples.size() };
+ 	auto const [ploss, vloss] = TrainOnSamples(winner);
+@@ -557,7 +577,7 @@ std::pair<double, double> CCheckersDoc::TrainOnSamples(std::optional<game::Color
+ 		policy_loss_sum += policy_loss;
+ 
+ 		double const y{ m_Net.value() };
+-		value_loss_sum += (y - s.real_value) * (y - s.real_value);
++		value_loss_sum += (y - s.outcome) * (y - s.outcome);   // reported against the pure outcome, comparable with earlier runs
+ 
+ 		std::vector dL_policy(896, .0);
+ 
