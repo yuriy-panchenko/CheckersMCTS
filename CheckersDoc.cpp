@@ -663,5 +663,5 @@ void CCheckersDoc::OnUpdateStartLearningThread(CCmdUI* pCmdUI)
 
 void CCheckersDoc::OnShock()
 {
-	m_Net.shock();
+	//m_Net.shock();
 }
