@@ -63,6 +63,13 @@ section_key{ _T("Settings") },
 white_human{ _T("WhiteIsHuman") },
 black_human{ _T("BlackIsHuman") };
 
+static const NNet::topology g_Topology
+{
+	{256,256,128},	//	body
+	{256},				//	policy
+	{64},				//	value
+};
+
 CCheckersDoc::CCheckersDoc() noexcept
 	:m_isWhiteHuman{ FALSE }
 	, m_isBlackHuman{ FALSE }
@@ -72,6 +79,7 @@ CCheckersDoc::CCheckersDoc() noexcept
 	, m_winWhite{}
 	, m_winBlack{}
 	, m_Tree{ Checkers{ Color::White }, { [this](auto const& inp) {return F1(inp); }} }
+	, m_Net{ g_Topology }
 	, m_pLearnTh{ nullptr }
 {
 	class ms_timer
