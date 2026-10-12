@@ -2,7 +2,6 @@
 #include <memory>
 #include <functional>
 #include <unordered_set>
-#include <random>
 #include <map>
 #include "defines.h"
 
@@ -38,7 +37,7 @@ namespace mcts
 		static constexpr size_t stale_limit{ 3 };       // same board seen this many times => draw
 		static constexpr int no_progress_limit{ 30 };   // plies (20 moves per side) with no capture and no pawn move => draw
 		// Value of a draw for EACH player (not a signed value: it must not be negated when backing up).
-		static constexpr double draw_value{ -.1 };
+		static constexpr double draw_value{ .0 };
 	public:
 		MCTS(game::Checkers const& initial_state, callback&& cb, double _c_puct = 1.5);
 		MCTS& operator=(MCTS&&);

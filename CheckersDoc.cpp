@@ -24,7 +24,7 @@
 #endif
 
 #define TIMER_ELLAPLE	(50)
-#define LEARNING_RATE	(.2)
+#define LEARNING_RATE	(.02)
 // value target = lambda*outcome + (1-lambda)*tanh(material/MATERIAL_SCALE); lambda ramps up so material fades out
 #define VALUE_MIX_START	(.3)
 #define VALUE_MIX_GAMES	(1500.)
