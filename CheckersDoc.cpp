@@ -38,7 +38,10 @@ BEGIN_MESSAGE_MAP(CCheckersDoc, CDocument)
 	ON_UPDATE_COMMAND_UI(ID_WHITE_HUMAN, &CCheckersDoc::OnUpdateWhiteHuman)
 	ON_UPDATE_COMMAND_UI(IDS_INDICATOR_ADJUSTS, &CCheckersDoc::OnUpdateIdsIndicatorAdjusted)
 	ON_UPDATE_COMMAND_UI(IDS_INDICATOR_LEARNS, &CCheckersDoc::OnUpdateIdsIndicatorLearns)
-	ON_COMMAND(ID_SHOCK, &CCheckersDoc::OnShock)
+	ON_COMMAND(ID_NEW_GAME, &CCheckersDoc::OnNewGame)
+	ON_UPDATE_COMMAND_UI(ID_NEW_GAME, &CCheckersDoc::OnUpdateNewGame)
+	ON_COMMAND(ID_NEXT_STEP, &CCheckersDoc::OnNextStep)
+	ON_UPDATE_COMMAND_UI(ID_NEXT_STEP, &CCheckersDoc::OnUpdateNextStep)
 END_MESSAGE_MAP()
 
 // CCheckersDoc construction/destruction
@@ -57,6 +60,7 @@ CCheckersDoc::CCheckersDoc() noexcept
 {
 	m_isWhiteHuman = theApp.GetProfileInt(section_key, white_human, TRUE);
 	m_isBlackHuman = theApp.GetProfileInt(section_key, black_human, FALSE);
+	m_bRunning = !m_isWhiteHuman && !m_isBlackHuman;
 	//m_isWhiteHuman = m_isBlackHuman = TRUE;
 }
 
@@ -123,7 +127,8 @@ void CCheckersDoc::Kick()
 		return;
 	if (IsHuman(m_View.state.WhoMakesTurn()))
 		return;
-	m_bBusy = m_pLearnTh->PostThreadMessage(WM_NEXT_MOVE, 0, 0);
+	OnNextStep();
+	//m_bBusy = m_pLearnTh->PostThreadMessage(WM_NEXT_MOVE, 0, 0);
 }
 
 void CCheckersDoc::OnMoveFinished()
@@ -164,9 +169,7 @@ void CCheckersDoc::OnMoveFinished()
 			AfxMessageBox(str);
 		}
 		if (m_pLearnTh)		//	still alive after the modal box
-		{
-			m_bBusy = m_pLearnTh->PostThreadMessage(WM_NEW_GAME, 0, 0);
-		}
+			OnNewGame();
 	}
 	else
 		Kick();
@@ -387,7 +390,23 @@ void CCheckersDoc::OnCloseDocument()
 	CDocument::OnCloseDocument();
 }
 
-void CCheckersDoc::OnShock()
+void CCheckersDoc::OnNewGame()
 {
-	//m_Net.shock();
+	m_bBusy = m_pLearnTh->PostThreadMessage(WM_NEW_GAME, 0, 0);
+}
+
+void CCheckersDoc::OnUpdateNewGame(CCmdUI* pCmdUI)
+{
+	pCmdUI->Enable(!m_bRunning&&!m_View.over&&!m_bBusy);
+}
+
+void CCheckersDoc::OnNextStep()
+{
+	m_bBusy = m_pLearnTh->PostThreadMessage(WM_NEXT_MOVE, 0, 0);
+}
+
+void CCheckersDoc::OnUpdateNextStep(CCmdUI* pCmdUI)
+{
+	pCmdUI->SetCheck(m_bBusy);
+	pCmdUI->Enable(!m_bRunning&&!m_View.over&&!m_bBusy);
 }

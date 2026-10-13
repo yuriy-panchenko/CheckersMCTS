@@ -58,10 +58,10 @@ private:
 	void MakeMove(game::Move const& m);
 	auto& GetGame() { return m_Tree.current_state(); }
 	auto& GetGame()const { return m_Tree.current_state(); }
-	Sample MakeSample()const;
+	game::Sample MakeSample()const;
 	void EndGame(std::optional<game::Color> winner, GameStats::Reason why);
-	std::pair<double, double> TrainOnSamples(std::optional<game::Color> winner);   // avg policy, avg value loss
-	NNet::out_pair F1(std::vector<double> const&);
+	mcts::MCTS::loss_sum_result TrainOnSamples(std::optional<game::Color> winner);   // avg policy, avg value loss
+	//NNet::out_pair F1(std::vector<double> const&);
 	void Publish();
 	void AddBuild(CString const&);
 
@@ -69,8 +69,7 @@ private:
 	//	thread-owned, never touched by the UI
 	Moves m_PossibleMoves;
 	mcts::MCTS m_Tree;
-	NNet m_Net;
-	std::vector<Sample> m_Samples;
+	std::vector<game::Sample> m_Samples;
 	GameStats m_Stats;
 	size_t m_uGameCount{}, m_uMoveCount{}, m_winWhite{}, m_winBlack{};
 	double m_FirstValue{};

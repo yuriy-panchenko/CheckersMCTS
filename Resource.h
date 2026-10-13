@@ -52,13 +52,15 @@
 #define ID_WHITE_HUMAN                  32775
 #define ID_START_LEARNING_THREAD        32776
 #define ID_SHOCK                        32777
+#define ID_NEW_GAME                     32778
+#define ID_NEXT_STEP                    32779
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        310
-#define _APS_NEXT_COMMAND_VALUE         32778
+#define _APS_NEXT_COMMAND_VALUE         32780
 #define _APS_NEXT_CONTROL_VALUE         1000
 #define _APS_NEXT_SYMED_VALUE           314
 #endif
