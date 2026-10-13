@@ -24,7 +24,7 @@
 #endif
 
 #define TIMER_ELLAPLE	(50)
-#define LEARNING_RATE	(.02)
+#define LEARNING_RATE	(.01)
 // value target = lambda*outcome + (1-lambda)*tanh(material/MATERIAL_SCALE); lambda ramps up so material fades out
 #define VALUE_MIX_START	(.3)
 #define VALUE_MIX_GAMES	(1500.)
@@ -65,9 +65,9 @@ black_human{ _T("BlackIsHuman") };
 
 static const NNet::topology g_Topology
 {
-	{256,256,128},	//	body
-	{256},				//	policy
-	{64},				//	value
+	{180, 180, 180, 180, 128},	//	body
+	{160, 200},				//	policy
+	{64, 32},				//	value
 };
 
 CCheckersDoc::CCheckersDoc() noexcept
@@ -78,9 +78,9 @@ CCheckersDoc::CCheckersDoc() noexcept
 	, m_uMoveCount{}
 	, m_winWhite{}
 	, m_winBlack{}
-	, m_Tree{ Checkers{ Color::White }, { [this](auto const& inp) {return F1(inp); }} }
-	, m_Net{ g_Topology }
-	, m_pLearnTh{ nullptr }
+, m_Tree{ Checkers{ Color::White }, { [this](auto const& inp) {return F1(inp); }} }
+, m_Net{ g_Topology }
+, m_pLearnTh{ nullptr }
 {
 	class ms_timer
 	{
