@@ -48,7 +48,7 @@ int COutputWnd::OnCreate(LPCREATESTRUCT lpCreateStruct)
 
 	if (!m_wndOutputBuild.Create(dwStyle, rectDummy, &m_wndTabs, 2)
 		|| !m_wndOutputDebug.Create(dwStyle, rectDummy, &m_wndTabs, 3)
-		|| !m_wndChart.Create(NULL, NULL, WS_CHILD | WS_VISIBLE, CRect{}, this, ID_CHART_WND)
+		|| !m_wndChart.Create(NULL, NULL, WS_CHILD | WS_VISIBLE, CRect{}, &m_wndTabs, ID_CHART_WND)
 		/*
 		||!m_wndOutputFind.Create(dwStyle, rectDummy, &m_wndTabs, 4)*/)
 	{
@@ -94,7 +94,7 @@ int COutputWnd::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	std::ifstream s{ CHART_DATA_FILENAME, std::ios::binary };
 	if (s)
 		m_wndChart.Load(s, std::filesystem::file_size(CHART_DATA_FILENAME) / sizeof(double));
-	m_wndChart.SetFocus();
+	//m_wndChart.SetFocus();
 	return 0;
 }
 

@@ -4,6 +4,7 @@
 #include "defines.h"
 #include "mcts.h"
 #include "GameStats.h"
+#include "Checkers.h"
 
 //	UI -> thread
 constexpr UINT WM_NEXT_MOVE{ WM_APP + 0x0001 };		//	AI picks and plays the move for the side to move

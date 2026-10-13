@@ -51,13 +51,14 @@ black_human{ _T("BlackIsHuman") };
 CCheckersDoc::CCheckersDoc() noexcept
 	:m_isWhiteHuman{ FALSE }
 	, m_isBlackHuman{ FALSE }
-	, m_bRunning{ TRUE }
 	, m_bBusy{ FALSE }
 	, m_bReady{ FALSE }
+	, m_bRunning{ FALSE }
 	, m_pLearnTh{ nullptr }
 {
 	m_isWhiteHuman = theApp.GetProfileInt(section_key, white_human, TRUE);
 	m_isBlackHuman = theApp.GetProfileInt(section_key, black_human, FALSE);
+	m_isWhiteHuman = m_isBlackHuman = TRUE;
 }
 
 game::Board const& CCheckersDoc::GetBoard() const
@@ -170,6 +171,8 @@ void CCheckersDoc::OnMoveFinished()
 	}
 	else
 		Kick();
+	TRACE(_T("capture=%p focus=%p active=%p fg=%p\n"),
+		::GetCapture(), ::GetFocus(), ::GetActiveWindow(), ::GetForegroundWindow());
 }
 
 void CCheckersDoc::UpdatePicture(BOOL doRedraw)
@@ -361,7 +364,6 @@ void CCheckersDoc::KillLearner()
 	m_pLearnTh->SetNotifyWnd(nullptr);		//	no more posts to a view that is going away
 	m_pLearnTh->PostThreadMessage(WM_QUIT, 0, 0);
 	::WaitForSingleObject(m_pLearnTh->m_hThread, INFINITE);
-	delete m_pLearnTh;
 	m_pLearnTh = nullptr;
 	m_bReady = FALSE;
 	m_bBusy = FALSE;
