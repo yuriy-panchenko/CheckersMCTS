@@ -37,7 +37,7 @@ int COutputWnd::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	rectDummy.SetRectEmpty();
 
 	// Create tabs window:
-	if (!m_wndTabs.Create(CMFCTabCtrl::STYLE_FLAT, rectDummy, this, 1))
+	if (!m_wndTabs.Create(CMFCTabCtrl::STYLE_FLAT, rectDummy, this, ID_OUTPUT_TABS))
 	{
 		TRACE0("Failed to create output tab window\n");
 		return -1;      // fail to create
@@ -46,8 +46,8 @@ int COutputWnd::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	// Create output panes:
 	const DWORD dwStyle = LBS_NOINTEGRALHEIGHT | WS_CHILD | WS_VISIBLE | WS_HSCROLL | WS_VSCROLL;
 
-	if (!m_wndOutputBuild.Create(dwStyle, rectDummy, &m_wndTabs, 2)
-		|| !m_wndOutputDebug.Create(dwStyle, rectDummy, &m_wndTabs, 3)
+	if (!m_wndOutputBuild.Create(dwStyle, rectDummy, &m_wndTabs, ID_OUTPUT_BUILD)
+		|| !m_wndOutputDebug.Create(dwStyle, rectDummy, &m_wndTabs, ID_OUTPUT_DEBUG)
 		|| !m_wndChart.Create(NULL, NULL, WS_CHILD | WS_VISIBLE, CRect{}, &m_wndTabs, ID_CHART_WND)
 		/*
 		||!m_wndOutputFind.Create(dwStyle, rectDummy, &m_wndTabs, 4)*/)

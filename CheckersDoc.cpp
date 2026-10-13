@@ -171,8 +171,8 @@ void CCheckersDoc::OnMoveFinished()
 	}
 	else
 		Kick();
-	TRACE(_T("capture=%p focus=%p active=%p fg=%p\n"),
-		::GetCapture(), ::GetFocus(), ::GetActiveWindow(), ::GetForegroundWindow());
+	/*TRACE(_T("capture=%p focus=%p active=%p fg=%p\n"),
+		::GetCapture(), ::GetFocus(), ::GetActiveWindow(), ::GetForegroundWindow());*/
 }
 
 void CCheckersDoc::UpdatePicture(BOOL doRedraw)
@@ -201,7 +201,6 @@ BOOL CCheckersDoc::OnNewDocument()
 		m_pLearnTh = static_cast<CLearningThread*>(::AfxBeginThread(RUNTIME_CLASS(CLearningThread), THREAD_PRIORITY_NORMAL, 0, CREATE_SUSPENDED));
 		if (!m_pLearnTh)
 			return FALSE;
-		m_pLearnTh->m_bAutoDelete = FALSE;		//	we wait on it and delete it ourselves
 		m_pLearnTh->SetNotifyWnd(pView ? pView->GetSafeHwnd() : nullptr);
 		m_bBusy = TRUE;
 		m_pLearnTh->ResumeThread();
@@ -361,12 +360,12 @@ void CCheckersDoc::OnUpdateStartPause(CCmdUI* pCmdUI)
 
 void CCheckersDoc::KillLearner()
 {
+	HANDLE const hTh{ *m_pLearnTh };
 	m_pLearnTh->SetNotifyWnd(nullptr);		//	no more posts to a view that is going away
 	m_pLearnTh->PostThreadMessage(WM_QUIT, 0, 0);
-	::WaitForSingleObject(m_pLearnTh->m_hThread, INFINITE);
+	::WaitForSingleObject(hTh, INFINITE);
 	m_pLearnTh = nullptr;
-	m_bReady = FALSE;
-	m_bBusy = FALSE;
+	m_bReady = m_bBusy = FALSE;
 }
 
 void CCheckersDoc::OnWhiteHuman()

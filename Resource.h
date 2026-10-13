@@ -45,10 +45,12 @@
 #define IDS_FIND_TAB                    302
 #define IDS_EDIT_MENU                   306
 #define ID_CHART_WND                    310
+#define ID_OUTPUT_TABS                  311
+#define ID_OUTPUT_BUILD                 312
+#define ID_OUTPUT_DEBUG                 313
 #define ID_START_PAUSE                  32772
 #define ID_WHITE_HUMAN                  32775
 #define ID_START_LEARNING_THREAD        32776
-#define ID_BUTTON32777                  32777
 #define ID_SHOCK                        32777
 
 // Next default values for new objects
@@ -58,6 +60,6 @@
 #define _APS_NEXT_RESOURCE_VALUE        310
 #define _APS_NEXT_COMMAND_VALUE         32778
 #define _APS_NEXT_CONTROL_VALUE         1000
-#define _APS_NEXT_SYMED_VALUE           311
+#define _APS_NEXT_SYMED_VALUE           314
 #endif
 #endif

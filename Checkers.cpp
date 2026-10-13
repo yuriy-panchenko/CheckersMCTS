@@ -222,3 +222,16 @@ CDocument* CCheckersApp::GetDocument()
 	return NULL;
 }
 
+
+BOOL CCheckersApp::PreTranslateMessage(MSG* pMsg)
+{
+	//if (pMsg->message == WM_LBUTTONDOWN || pMsg->message == WM_LBUTTONUP)
+	//{
+	//	TCHAR cls[64]{};
+	//	::GetClassName(pMsg->hwnd, cls, 64);
+	//	TRACE(_T("%s hwnd=%p cls=%s id=%d\n"),
+	//		pMsg->message == WM_LBUTTONDOWN ? _T("DOWN") : _T("UP  "),
+	//		pMsg->hwnd, cls, ::GetDlgCtrlID(pMsg->hwnd));
+	//}
+	return CWinAppEx::PreTranslateMessage(pMsg);
+}
