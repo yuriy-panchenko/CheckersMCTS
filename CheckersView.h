@@ -43,7 +43,7 @@ protected:
 	afx_msg BOOL OnEraseBkgnd(CDC* pDC);
 	afx_msg void OnSize(UINT nType, int cx, int cy);
 	afx_msg void OnLButtonDown(UINT nFlags, CPoint point);
-	afx_msg LRESULT OnAutoMove(WPARAM, LPARAM);
+	afx_msg LRESULT OnMoveFinished(WPARAM, LPARAM);
 	DECLARE_MESSAGE_MAP()
 
 private:

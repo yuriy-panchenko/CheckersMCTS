@@ -18,20 +18,7 @@
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
-#define SIMULATION_COUNT	(100)
-#else
-#define SIMULATION_COUNT	(1'000)
 #endif
-
-#define TIMER_ELLAPLE	(50)
-#define LEARNING_RATE	(.01)
-// value target = lambda*outcome + (1-lambda)*tanh(material/MATERIAL_SCALE); lambda ramps up so material fades out
-#define VALUE_MIX_START	(.3)
-#define VALUE_MIX_GAMES	(1500.)
-#define MATERIAL_SCALE	(4.)
-//#define STALE_COUNT		(3ull)
-#define NNET_FILENAME	_T("net.bin")
-#define STATS_FILENAME	_T("games.csv")
 
 using namespace game;
 using namespace mcts;
@@ -52,8 +39,6 @@ BEGIN_MESSAGE_MAP(CCheckersDoc, CDocument)
 	ON_UPDATE_COMMAND_UI(ID_WHITE_HUMAN, &CCheckersDoc::OnUpdateWhiteHuman)
 	ON_UPDATE_COMMAND_UI(IDS_INDICATOR_ADJUSTS, &CCheckersDoc::OnUpdateIdsIndicatorAdjusted)
 	ON_UPDATE_COMMAND_UI(IDS_INDICATOR_LEARNS, &CCheckersDoc::OnUpdateIdsIndicatorLearns)
-	ON_COMMAND(ID_START_LEARNING_THREAD, &CCheckersDoc::OnStartLearningThread)
-	ON_UPDATE_COMMAND_UI(ID_START_LEARNING_THREAD, &CCheckersDoc::OnUpdateStartLearningThread)
 	ON_COMMAND(ID_SHOCK, &CCheckersDoc::OnShock)
 END_MESSAGE_MAP()
 
@@ -63,114 +48,28 @@ section_key{ _T("Settings") },
 white_human{ _T("WhiteIsHuman") },
 black_human{ _T("BlackIsHuman") };
 
-static const NNet::topology g_Topology
-{
-	{180, 180, 180, 180, 128},	//	body
-	{160, 200},				//	policy
-	{64, 32},				//	value
-};
-
 CCheckersDoc::CCheckersDoc() noexcept
 	:m_isWhiteHuman{ FALSE }
 	, m_isBlackHuman{ FALSE }
-	, m_idTimer{ 0 }
-	, m_uGameCount{}
-	, m_uMoveCount{}
-	, m_winWhite{}
-	, m_winBlack{}
-, m_Tree{ Checkers{ Color::White }, { [this](auto const& inp) {return F1(inp); }} }
-, m_Net{ g_Topology }
-, m_pLearnTh{ nullptr }
+	, m_bRunning{ TRUE }
+	, m_bBusy{ FALSE }
+	, m_bReady{ FALSE }
+	, m_pLearnTh{ nullptr }
 {
-	class ms_timer
-	{
-		std::chrono::steady_clock::time_point from;
-		size_t mss;
-	public:
-		ms_timer() :from{ std::chrono::steady_clock::now() }, mss{} {}
-		size_t stop()
-		{
-			return mss = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - from).count();
-		}
-		void out_dbg(size_t sample_count = 1ull)
-		{
-			CString str;
-			str.Format(_T("Total time over %I64u samples is %I64u(ms). Average %.3f(ms)/sample"), sample_count, mss, double(mss) / sample_count);
-			OutputDebugString(str);
-		}
-	};
-	/*long long diff{};
-	auto const start{ std::chrono::steady_clock::now() };
-
-	for (size_t i = 0; i < 1'000; i++)
-	{
-		game::Checkers ch;
-		auto mvs{ ch.GetAvailableMoves() };
-		while (!mvs.empty())
-			mvs = ch.Do(mvs[rand() % mvs.size()]);
-
-		auto const end{ std::chrono::steady_clock::now() };
-		diff += std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-	}
-
-	CString str;
-	str.Format(_T("Total over 1000 is %.2f ms"), diff / 1'000'000.);
-	OutputDebugString(str);*/
-
-	/*
-	m_Net.think(encode_board(m_Game));								// 1. forward pass
-	auto legal = encode_legal_moves(m_Game, rules_engine_output);	// 2. your move-encoding step maps legal Jumps → indices
-	auto priors = mask_and_softmax(m_Net.policy_logits(), legal);	// 3. masking + softmax happens here
-	double v = m_Net.value();											// 4. value head, no masking needed (scalar)
-	*/
-
-	/*
-	Position pos{ Row{1}, Column{1} };
-	auto s{ pos.operator CString() };
-
-	NNet net;
-	net.init();
-	MCTS search{ m_Game, net };
-
-	auto const N{ 1'000 };
-	ms_timer t;
-
-	for (int i = 0; i < N; ++i)
-		search.run_simulation();
-
-	t.stop();
-	t.out_dbg(N);
-	search.debug_dump_root(20);
-	*/
-#ifdef _DEBUG
-	::srand(10);
-#else
-	::srand((unsigned)::time(nullptr));
-#endif // DEBUG
-	m_Stats.load_csv(STATS_FILENAME);
-
-	m_Net.init();
-
-	std::ifstream s{ NNET_FILENAME, std::ios::binary };
-	if (s)
-		try { s >> m_Net; }
-	catch (const std::exception& e)
-	{
-		::MessageBox(NULL, CA2W{ e.what() }, _T("Error loading nnet!"), MB_OK | MB_ICONERROR);
-	}
-
 	m_isWhiteHuman = theApp.GetProfileInt(section_key, white_human, TRUE);
 	m_isBlackHuman = theApp.GetProfileInt(section_key, black_human, FALSE);
 }
 
 game::Board const& CCheckersDoc::GetBoard() const
 {
-	return m_Tree.current_state().GetBoard();
+	return m_View.state.GetBoard();
 }
 
 BOOL CCheckersDoc::IsMoveable(game::Position pos) const
 {
-	for (auto& m : m_PossibleMoves)
+	if (m_View.over || !IsHuman(m_View.state.WhoMakesTurn()))
+		return FALSE;
+	for (auto& m : m_View.possible)
 		if (m.front().From() == pos)
 			return TRUE;
 	return FALSE;
@@ -178,7 +77,7 @@ BOOL CCheckersDoc::IsMoveable(game::Position pos) const
 
 BOOL CCheckersDoc::IsPossible2Move2(game::Position root, game::Position testPos) const
 {
-	for (auto& m : m_PossibleMoves)
+	for (auto& m : m_View.possible)
 		if (m.front().From() == root)
 			for (auto& j : m)
 				if (j.To() == testPos)
@@ -188,7 +87,7 @@ BOOL CCheckersDoc::IsPossible2Move2(game::Position root, game::Position testPos)
 
 game::Move CCheckersDoc::FindMove(game::Position from, game::Position to) const
 {
-	for (auto& m : m_PossibleMoves)
+	for (auto& m : m_View.possible)
 		if (m.front().From() == from && m.back().To() == to)
 			return m;
 	return {};
@@ -196,8 +95,7 @@ game::Move CCheckersDoc::FindMove(game::Position from, game::Position to) const
 
 CCheckersDoc::~CCheckersDoc()
 {
-	if (m_idTimer && ::KillTimer(NULL, m_idTimer))
-		m_idTimer = 0;
+	ASSERT(!m_pLearnTh);	//	OnCloseDocument() stops it
 }
 
 BOOL CCheckersDoc::IsHuman(game::Color col) const
@@ -205,160 +103,73 @@ BOOL CCheckersDoc::IsHuman(game::Color col) const
 	return col == Color::White ? m_isWhiteHuman : m_isBlackHuman;
 }
 
-void CCheckersDoc::MakeMove(game::Move const& m)
+void CCheckersDoc::HumanMove(game::Move const& m)
 {
-	if (m.empty())
-		m_Tree.current_state().Do(m);
-	else
+	if (m_bBusy || !m_bReady || m_View.over || !IsHuman(m_View.state.WhoMakesTurn()))
+		return;
+	m_bBusy = TRUE;
+	m_bRunning = TRUE;		//	the opponent answers, as before
+	auto const p{ new game::Move{ m } };
+	if (!m_pLearnTh->PostThreadMessage(WM_HUMAN_MOVE, 0, reinterpret_cast<LPARAM>(p)))
 	{
-		++m_uMoveCount;
-
-		auto const& root{ m_Tree.get_root() };
-		int total_visits{};
-		for (auto const& e : root.edges)
-			total_visits += e.Visits;
-
-		auto const& best_edge{ *std::max_element(root.edges.begin(), root.edges.end(),
-			[](auto const& a, auto const& b) { return a.Visits < b.Visits; }) };
-
-		auto pMain{ static_cast<CMainFrame*>(theApp.GetMainWnd()) };
-		ASSERT(pMain);
-		CString str;
-		str.Format(_T("%I64u. %s | root N=%d | best Prob=%.3f Q=%+.3f"),
-			m_uMoveCount, ToString(m), total_visits, best_edge.PriorProb, best_edge.Mean());
-
-		pMain->GetOutputWnd().AddBuildString(str);
-		m_Tree.advance_root(m);
+		delete p;
+		m_bBusy = FALSE;
 	}
-	m_PossibleMoves = GetGame().GetAvailableMoves();
-
-	m_MaxQuiet = (std::max)(m_MaxQuiet, m_Tree.root_quiet());
-	m_MaxRepeats = (std::max)(m_MaxRepeats, m_Tree.root_repeats());
-
-	//	TestEndOfGame
-	//if (!m_PossibleMoves.empty() && GetGame().GetBoard().GetZipID().is_king_vs_king(2))
-		//EndGame({}, GameStats::Reason::KvKK);
-	if (!m_PossibleMoves.empty() && GetGame().GetBoard().GetZipID().is_king_vs_king())
-		EndGame({}, GameStats::Reason::KvK);
-	else if (!m_PossibleMoves.empty() && m_Tree.root_repeats() >= MCTS::stale_limit)
-		EndGame({}, GameStats::Reason::Stale);
-	else if (!m_PossibleMoves.empty() && m_Tree.root_quiet() >= MCTS::no_progress_limit)
-		EndGame({}, GameStats::Reason::NoProgress);
-	else if (m_PossibleMoves.empty())
-		EndGame(!GetGame().WhoMakesTurn(), GameStats::Reason::NoMoves);
-	else if (!IsHuman(GetGame().WhoMakesTurn()))
-		/*{
-			if (auto pFr{ (CMainFrame*)theApp.GetMainWnd() })
-				if (auto pView{ pFr->GetActiveView() })
-					pView->PostMessage(WM_AUTO_MOVE, 0, 0);
-		}*/
-		m_idTimer = ::SetTimer(NULL, 0, TIMER_ELLAPLE, AutoMoveProc);
 }
 
-void CCheckersDoc::AutoMove()
+void CCheckersDoc::Kick()
 {
-	m_Tree.run_simulation();    // expands a fresh root, so the noise below has edges to act on
-	m_Tree.add_root_noise();    // exploration noise must be in place BEFORE the search it is meant to shape
-	for (size_t i = 1; i < SIMULATION_COUNT; ++i)
-		m_Tree.run_simulation();
-
-	double const q{ m_Tree.root_value() };   // mover's view; the last one logged belongs to the player who made the final move
-	m_QAbsMax = (std::max)(m_QAbsMax, std::abs(q));
-	m_QLast = q;
-
-	m_Samples.push_back(MakeSample());
-	if (m_Samples.size() == 1)
-		m_FirstValue = m_Net.value();
-	MakeMove(m_Tree.select_move());
-	UpdatePicture(FALSE);
+	if (!m_pLearnTh || m_bBusy || !m_bReady || !m_bRunning || m_View.over)
+		return;
+	if (IsHuman(m_View.state.WhoMakesTurn()))
+		return;
+	m_bBusy = m_pLearnTh->PostThreadMessage(WM_NEXT_MOVE, 0, 0);
 }
 
-Sample CCheckersDoc::MakeSample()const
+void CCheckersDoc::OnMoveFinished()
 {
-	// NOW build target_policy from root's edges (this is separate from
-		// each Node's own `sample` used internally at expand-time)
-	Sample rec{ GetGame().WhoMakesTurn() };
-	auto& root{ m_Tree.get_root() };
+	if (!m_pLearnTh)
+		return;
+	m_bReady = TRUE;
+	m_bBusy = FALSE;
 
-	//ASSERT(rec.mover == root.state.WhoMakesTurn());
-	int total_visits{};
-	for (auto const& e : root.edges)
-		total_visits += e.Visits;
+	auto v{ m_pLearnTh->TakeView() };	//	one locked copy; everything below runs on the UI thread
 
-	rec.target_policy.resize(896, .0);
-	for (auto const& e : root.edges)
-		rec.target_policy[e.action_index] = double(e.Visits) / total_visits;
+	auto& out{ static_cast<CMainFrame*>(theApp.GetMainWnd())->GetOutputWnd() };
+	if (v.newGame)
+		out.ClearBuild();
+	if (!v.summary.IsEmpty())
+		out.SetSummary(v.summary);
+	for (auto const& s : v.build)
+		out.AddBuildString(s);
+	for (auto const& s : v.debug)
+		out.AddDebugString(s);
+	for (auto d : v.chart)
+		out.AddChartData(d);
+	if (!v.chart.empty())
+		out.SaveChartData();
 
-	rec.legal_indices.reserve(root.edges.size());
-	for (auto const& e : root.edges)
-		rec.legal_indices.insert((size_t)e.action_index); /* same indices as root->edges' action_index list */
+	m_View = std::move(v);
+	UpdatePicture(m_View.over);
 
-	rec.board = root.state.encode_board();
-	return rec;
-}
-
-// material balance from the mover's point of view; board = 32 dark squares x { own man, own king, opp man, opp king }
-static double material_balance(std::vector<double> const& b)
-{
-	double own{}, opp{};
-	for (size_t i = 0; i + 3 < b.size(); i += 4)
+	if (m_View.over)
 	{
-		own += b[i] + 2. * b[i + 1];
-		opp += b[i + 2] + 2. * b[i + 3];
-	}
-	return own - opp;
-}
-
-void CCheckersDoc::EndGame(std::optional<Color> winner, GameStats::Reason why)
-{
-	UpdatePicture(TRUE);
-
-	if (winner)
-		if (*winner == Color::White)
-			++m_winWhite;
-		else ++m_winBlack;
-
-	CString str;
-	if (IsHuman(Color::White) || IsHuman(Color::Black))
-	{
-		str.Format(_T("Game over! %s is a winner."), winner == Color::White ? _T("WHITE") : _T("BLACK"));
-		AfxMessageBox(str);
-	}
-
-	double const lambda{ (std::min)(1., VALUE_MIX_START + (1. - VALUE_MIX_START) * double(m_Stats.games()) / VALUE_MIX_GAMES) };
-	for (auto& sam : m_Samples)
-	{
-		sam.outcome = winner ? sam.mover == *winner ? 1. : -1. : MCTS::draw_value;
-		sam.real_value = lambda * sam.outcome + (1. - lambda) * std::tanh(material_balance(sam.board) / MATERIAL_SCALE);
-	}
-
-	size_t const plies{ m_Samples.size() };
-	auto const [ploss, vloss] = TrainOnSamples(winner);
-
-	auto const count{ [&](Color c)
+		if (IsHuman(game::Color::White) || IsHuman(game::Color::Black))
 		{
-			int men{}, kings{};
-			for (auto const& [p, pos] : GetGame().GetBoard().GetPieces(c))
-				(p.rank == Rank::Queen ? kings : men)++;
-			return std::pair{ men, kings };
-		} };
-	auto const [menW, kingW] = count(Color::White);
-	auto const [menB, kingB] = count(Color::Black);
-
-	GameStats::Record const rec{ m_Stats.games() + 1, winner, why, plies, ploss, vloss,
-		m_MaxQuiet, m_MaxRepeats, m_QAbsMax, m_QLast, menW, kingW, menB, kingB };
-	m_Stats.add(rec);
-	GameStats::append_csv(STATS_FILENAME, rec);
-	static_cast<CMainFrame*>(theApp.GetMainWnd())->GetOutputWnd().SetSummary(m_Stats.summary());
-
-	std::ofstream s{ NNET_FILENAME, std::ios::binary };
-	if (s)
-		try { s << m_Net; }
-	catch (const std::exception& e)
-	{
-		::MessageBox(NULL, CA2W{ e.what() }, _T("Error saving nnet!"), MB_OK | MB_ICONERROR);
+			CString str;
+			if (m_View.winner)
+				str.Format(_T("Game over! %s is a winner."), *m_View.winner == game::Color::White ? _T("WHITE") : _T("BLACK"));
+			else
+				str = _T("Game over! Draw.");
+			AfxMessageBox(str);
+		}
+		if (m_pLearnTh)		//	still alive after the modal box
+		{
+			m_bBusy = m_pLearnTh->PostThreadMessage(WM_NEW_GAME, 0, 0);
+		}
 	}
-	OnNewDocument();
+	else
+		Kick();
 }
 
 void CCheckersDoc::UpdatePicture(BOOL doRedraw)
@@ -378,23 +189,22 @@ BOOL CCheckersDoc::OnNewDocument()
 	if (!CDocument::OnNewDocument())
 		return FALSE;
 
-	m_FirstValue = .0;
-	m_MaxQuiet = 0;
-	m_MaxRepeats = 0;
-	m_QAbsMax = .0;
-	m_QLast = .0;
-
-	if (m_idTimer && ::KillTimer(NULL, m_idTimer))
-		m_idTimer = 0;
-	static_cast<CMainFrame*>(theApp.GetMainWnd())->GetOutputWnd().SetSummary(m_Stats.summary());
-	static_cast<CMainFrame*>(theApp.GetMainWnd())->GetOutputWnd().ClearBuild();
-
-	++m_uGameCount;
-	m_uMoveCount = 0;
-	//m_idCount.clear();
-
-	m_Tree = MCTS{ { Color::Black }, { [this](auto const& inp) {return F1(inp); }} };
-	MakeMove({});
+	if (!m_pLearnTh)
+	{
+		//	first call: start the engine; it posts WM_MOVE_FINISHED to the view once its first game is set up
+		auto const pos{ GetFirstViewPosition() };
+		auto pPos{ pos };
+		auto const pView{ pPos ? GetNextView(pPos) : nullptr };
+		m_pLearnTh = static_cast<CLearningThread*>(::AfxBeginThread(RUNTIME_CLASS(CLearningThread), THREAD_PRIORITY_NORMAL, 0, CREATE_SUSPENDED));
+		if (!m_pLearnTh)
+			return FALSE;
+		m_pLearnTh->m_bAutoDelete = FALSE;		//	we wait on it and delete it ourselves
+		m_pLearnTh->SetNotifyWnd(pView ? pView->GetSafeHwnd() : nullptr);
+		m_bBusy = TRUE;
+		m_pLearnTh->ResumeThread();
+	}
+	else if (m_bReady && !m_bBusy)
+		m_bBusy = m_pLearnTh->PostThreadMessage(WM_NEW_GAME, 0, 0);
 
 	return TRUE;
 }
@@ -479,20 +289,6 @@ void CCheckersDoc::Dump(CDumpContext& dc) const
 }
 #endif //_DEBUG
 
-void CCheckersDoc::AutoMoveProc(HWND, UINT, UINT_PTR, DWORD)
-{
-	if (auto pDoc{ dynamic_cast<CCheckersDoc*>(theApp.GetDocument()) })
-	{
-		if (::KillTimer(NULL, pDoc->m_idTimer))
-			pDoc->m_idTimer = 0;
-
-		ASSERT(!pDoc->m_PossibleMoves.empty());
-		//pDoc->MakeMove(pDoc->m_PossibleMoves[rand() % pDoc->m_PossibleMoves.size()]);
-		ASSERT(!pDoc->m_PossibleMoves.empty());
-		pDoc->AutoMove();
-	}
-}
-
 // CCheckersDoc commands
 
 
@@ -501,14 +297,14 @@ void CCheckersDoc::OnUpdateIdsIndicatorWhite(CCmdUI* pCmdUI)
 	CString str;
 	str.Format(_T("W %d"), GetBoard().GetPieces(Color::White).size());
 	pCmdUI->SetText(str);
-	pCmdUI->Enable(GetGame().WhoMakesTurn() == Color::White);
+	pCmdUI->Enable(m_View.state.WhoMakesTurn() == Color::White);
 }
 
 
 void CCheckersDoc::OnUpdateIdsIndicatorPossibleMoves(CCmdUI* pCmdUI)
 {
 	CString str;
-	str.Format(_T("Av %d"), m_PossibleMoves.size());
+	str.Format(_T("Av %d"), m_View.possible.size());
 	pCmdUI->SetText(str);
 }
 
@@ -517,124 +313,65 @@ void CCheckersDoc::OnUpdateIdsIndicatorBlack(CCmdUI* pCmdUI)
 	CString str;
 	str.Format(_T("B %d"), GetBoard().GetPieces(Color::Black).size());
 	pCmdUI->SetText(str);
-	pCmdUI->Enable(GetGame().WhoMakesTurn() == Color::Black);
+	pCmdUI->Enable(m_View.state.WhoMakesTurn() == Color::Black);
 }
 
 void CCheckersDoc::OnUpdateIdsIndicatorGameCount(CCmdUI* pCmdUI)
 {
 	CString str;
-	str.Format(_T("G %I64u"), m_uGameCount);
+	str.Format(_T("G %I64u"), m_View.gameCount);
 	pCmdUI->SetText(str);
 }
 
 void CCheckersDoc::OnUpdateIdsIndicatorAdjusted(CCmdUI* pCmdUI)
 {
 	CString str;
-	str.Format(_T("Aj %I64u"), m_Net.get_adjusts());
+	str.Format(_T("Aj %I64u"), m_View.adjusts);
 	pCmdUI->SetText(str);
 }
 
 void CCheckersDoc::OnUpdateIdsIndicatorMoveCount(CCmdUI* pCmdUI)
 {
 	CString str;
-	str.Format(_T("%I64u-%d"), m_uMoveCount, m_Tree.root_quiet());
+	str.Format(_T("%I64u-%d"), m_View.moveCount, m_View.quiet);
 	pCmdUI->SetText(str);
 }
 
 void CCheckersDoc::OnUpdateIdsIndicatorLearns(CCmdUI* pCmdUI)
 {
 	CString str;
-	str.Format(_T("Lr %I64u"), m_Net.get_learns());
+	str.Format(_T("Lr %I64u"), m_View.learns);
 	pCmdUI->SetText(str);
 }
 
 void CCheckersDoc::OnStartPause()
 {
-	if (m_idTimer)
-	{
-		if (::KillTimer(NULL, m_idTimer))
-			m_idTimer = 0;
-	}
-	else m_idTimer = ::SetTimer(NULL, 0, TIMER_ELLAPLE, AutoMoveProc);
+	m_bRunning = !m_bRunning;
+	Kick();
 }
 
 void CCheckersDoc::OnUpdateStartPause(CCmdUI* pCmdUI)
 {
-	pCmdUI->SetCheck(m_idTimer != 0);
+	pCmdUI->SetCheck(m_bRunning);
 	pCmdUI->Enable(!(IsHuman(Color::White) && IsHuman(Color::Black)));
-}
-
-//BOOL CCheckersDoc::Test4Stale()
-//{
-//	return ++m_idCount[GetBoard().GetZipID()] >= STALE_COUNT;
-//}
-
-std::pair<double, double> CCheckersDoc::TrainOnSamples(std::optional<game::Color> winner)
-{
-	double policy_loss_sum{}, value_loss_sum{};
-	ASSERT(!m_Samples.empty());
-
-	for (auto const& s : m_Samples)
-	{
-		m_Net.think(s.board);
-		auto const pihat{ MCTS::mask_and_softmax(m_Net.policy_logits(), s.legal_indices) };
-
-		double policy_loss{};
-		for (auto idx : s.legal_indices)
-			policy_loss -= s.target_policy[idx] * std::log((std::max)(pihat[idx], 1e-8));
-
-		policy_loss_sum += policy_loss;
-
-		double const y{ m_Net.value() };
-		value_loss_sum += (y - s.outcome) * (y - s.outcome);   // reported against the pure outcome, comparable with earlier runs
-
-		std::vector dL_policy(896, .0);
-
-		for (auto idx : s.legal_indices)
-			dL_policy[idx] = pihat[idx] - s.target_policy[idx];
-
-		m_Net.learn(s.board, dL_policy, s.real_value);
-	}
-
-	//m_Net.adjust(LEARNING_RATE, m_Samples.size());
-	m_Net.adjust(LEARNING_RATE / m_Samples.size());
-
-	CString str;
-	str.Format(_T("%I64u: %s [ %I64u:%I64u ] %zu moves, avg policy loss=%.4f, avg value loss=%.4f, value=%.4f"),
-		m_uGameCount,
-		winner ? (*winner == Color::White ? _T("W") : _T("B")) : _T("X"),
-		m_winWhite,
-		m_winBlack,
-		m_Samples.size(),
-		policy_loss_sum / m_Samples.size(), value_loss_sum / m_Samples.size(),
-		m_FirstValue
-	);
-	static_cast<CMainFrame*>(theApp.GetMainWnd())->GetOutputWnd().AddDebugString(str);
-	static_cast<CMainFrame*>(theApp.GetMainWnd())->GetOutputWnd().AddChartData(policy_loss_sum / m_Samples.size());
-	static_cast<CMainFrame*>(theApp.GetMainWnd())->GetOutputWnd().SaveChartData();
-
-	auto const ret{ std::make_pair(policy_loss_sum / m_Samples.size(), value_loss_sum / m_Samples.size()) };
-	m_Samples.clear();
-	return ret;
 }
 
 void CCheckersDoc::KillLearner()
 {
+	m_pLearnTh->SetNotifyWnd(nullptr);		//	no more posts to a view that is going away
 	m_pLearnTh->PostThreadMessage(WM_QUIT, 0, 0);
-	::WaitForSingleObject(*m_pLearnTh, INFINITE);
+	::WaitForSingleObject(m_pLearnTh->m_hThread, INFINITE);
+	delete m_pLearnTh;
 	m_pLearnTh = nullptr;
-}
-
-NNet::out_pair CCheckersDoc::F1(std::vector<double> const& inp)
-{
-	return m_Net.think(inp);
+	m_bReady = FALSE;
+	m_bBusy = FALSE;
 }
 
 void CCheckersDoc::OnWhiteHuman()
 {
 	m_isWhiteHuman = !m_isWhiteHuman;
 	if (!m_isWhiteHuman)
-		AutoMove();
+		Kick();
 }
 
 void CCheckersDoc::OnUpdateWhiteHuman(CCmdUI* pCmdUI)
@@ -651,22 +388,6 @@ void CCheckersDoc::OnCloseDocument()
 		KillLearner();
 
 	CDocument::OnCloseDocument();
-}
-
-void CCheckersDoc::OnStartLearningThread()
-{
-	if (m_pLearnTh)
-		KillLearner();
-	else
-	{
-		m_pLearnTh = static_cast<CLearningThread*>(::AfxBeginThread(RUNTIME_CLASS(CLearningThread)));
-	}
-}
-
-void CCheckersDoc::OnUpdateStartLearningThread(CCmdUI* pCmdUI)
-{
-	pCmdUI->SetCheck(m_pLearnTh != nullptr);
-	pCmdUI->Enable(IsHuman(Color::White) || IsHuman(Color::Black));
 }
 
 void CCheckersDoc::OnShock()

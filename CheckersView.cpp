@@ -44,7 +44,7 @@ BEGIN_MESSAGE_MAP(CCheckersView, CView)
 	ON_WM_ERASEBKGND()
 	ON_WM_SIZE()
 	ON_WM_LBUTTONDOWN()
-	ON_MESSAGE(WM_AUTO_MOVE, &OnAutoMove)
+	ON_MESSAGE(WM_MOVE_FINISHED, &OnMoveFinished)
 END_MESSAGE_MAP()
 
 // CCheckersView construction/destruction
@@ -354,8 +354,7 @@ void CCheckersView::OnLButtonDown(UINT nFlags, CPoint point)
 			}
 			else
 			{
-				GetDocument()->GetTree().run_simulation();
-				GetDocument()->MakeMove(m);
+				GetDocument()->HumanMove(m);
 				//GetDocument()->Add2History(m, TRUE);
 				//GetDocument()->
 				m_Selected = {};
@@ -369,9 +368,9 @@ void CCheckersView::OnLButtonDown(UINT nFlags, CPoint point)
 	//CView::OnLButtonDown(nFlags, point);
 }
 
-LRESULT CCheckersView::OnAutoMove(WPARAM, LPARAM)
+LRESULT CCheckersView::OnMoveFinished(WPARAM, LPARAM)
 {
-	GetDocument()->AutoMove();
+	GetDocument()->OnMoveFinished();
 	return 0;
 }
 

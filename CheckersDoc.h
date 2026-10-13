@@ -5,10 +5,7 @@
 
 #pragma once
 #include "defines.h"
-#include "mcts.h"
 #include "CLearningThread.h"
-#include "GameStats.h"
-#define WM_AUTO_MOVE	(WM_USER+0x0002)
 
 class CCheckersDoc : public CDocument
 {
@@ -24,9 +21,8 @@ public:
 	BOOL IsMoveable(game::Position)const;
 	BOOL IsPossible2Move2(game::Position root, game::Position testPos)const;
 	game::Move FindMove(game::Position from, game::Position to)const;
-	void MakeMove(game::Move const&);
-	void AutoMove();
-	auto& GetTree() { return m_Tree; }
+	void HumanMove(game::Move const&);		//	view -> thread
+	void OnMoveFinished();					//	thread -> UI, called from the view on WM_MOVE_FINISHED
 	// Operations
 public:
 
@@ -49,7 +45,6 @@ public:
 #endif
 
 protected:
-	static void AutoMoveProc(HWND, UINT, UINT_PTR, DWORD);
 	// Generated message map functions
 protected:
 	afx_msg void OnUpdateIdsIndicatorWhite(CCmdUI* pCmdUI);
@@ -63,8 +58,6 @@ protected:
 	afx_msg void OnUpdateIdsIndicatorLearns(CCmdUI* pCmdUI);
 	afx_msg void OnWhiteHuman();
 	afx_msg void OnUpdateWhiteHuman(CCmdUI* pCmdUI);
-	afx_msg void OnStartLearningThread();
-	afx_msg void OnUpdateStartLearningThread(CCmdUI* pCmdUI);
 	afx_msg void OnShock();
 	DECLARE_MESSAGE_MAP()
 
@@ -75,25 +68,14 @@ protected:
 
 private:
 	BOOL IsHuman(game::Color)const;
-	void EndGame(std::optional<game::Color>, GameStats::Reason);
 	void UpdatePicture(BOOL doRedraw);
-	auto const& GetGame()const { return m_Tree.current_state(); }
-	Sample MakeSample()const;
-	std::pair<double, double> TrainOnSamples(std::optional<game::Color>);   // avg policy, avg value loss
 	void KillLearner();
-	NNet::out_pair F1(std::vector<double> const&);
+	void Kick();		//	ask the thread for the next AI move if that is what should happen now
 
-	GameStats m_Stats;
 	BOOL m_isWhiteHuman, m_isBlackHuman;
-	Moves m_PossibleMoves;
-	UINT_PTR m_idTimer;
-	SIZE_T m_uGameCount, m_uMoveCount, m_winWhite, m_winBlack;
-	mcts::MCTS m_Tree;
-	NNet m_Net;
-	std::vector<Sample> m_Samples;
-	double m_FirstValue;
-	int m_MaxQuiet;          // per-game diagnostics for games.csv
-	size_t m_MaxRepeats;
-	double m_QAbsMax, m_QLast;   // largest |root value| in the game; root value at the final move
+	BOOL m_bRunning;	//	AI moves allowed (Start/Pause)
+	BOOL m_bBusy;		//	a message to the thread is in flight; cleared by WM_MOVE_FINISHED
+	BOOL m_bReady;		//	the thread has published its first position (its queue exists)
+	GameView m_View;	//	UI-thread copy of the thread's state; the only game data the UI reads
 	CLearningThread* m_pLearnTh;
 };
