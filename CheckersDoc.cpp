@@ -1,4 +1,3 @@
-
 // CheckersDoc.cpp : implementation of the CCheckersDoc class
 //
 
@@ -58,7 +57,7 @@ CCheckersDoc::CCheckersDoc() noexcept
 {
 	m_isWhiteHuman = theApp.GetProfileInt(section_key, white_human, TRUE);
 	m_isBlackHuman = theApp.GetProfileInt(section_key, black_human, FALSE);
-	m_isWhiteHuman = m_isBlackHuman = TRUE;
+	//m_isWhiteHuman = m_isBlackHuman = TRUE;
 }
 
 game::Board const& CCheckersDoc::GetBoard() const
@@ -292,8 +291,6 @@ void CCheckersDoc::Dump(CDumpContext& dc) const
 #endif //_DEBUG
 
 // CCheckersDoc commands
-
-
 void CCheckersDoc::OnUpdateIdsIndicatorWhite(CCmdUI* pCmdUI)
 {
 	CString str;
@@ -301,7 +298,6 @@ void CCheckersDoc::OnUpdateIdsIndicatorWhite(CCmdUI* pCmdUI)
 	pCmdUI->SetText(str);
 	pCmdUI->Enable(m_View.state.WhoMakesTurn() == Color::White);
 }
-
 
 void CCheckersDoc::OnUpdateIdsIndicatorPossibleMoves(CCmdUI* pCmdUI)
 {

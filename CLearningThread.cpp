@@ -14,7 +14,7 @@ using namespace mcts;
 #else
 #define SIMULATION_COUNT	(1'000)
 #endif
-#define LEARNING_RATE	(.01)
+#define LEARNING_RATE	(.0007)
 // value target = lambda*outcome + (1-lambda)*tanh(material/MATERIAL_SCALE); lambda ramps up so material fades out
 #define VALUE_MIX_START	(.3)
 #define VALUE_MIX_GAMES	(1500.)
@@ -30,7 +30,6 @@ static const NNet::topology g_Topology
 };
 
 // CLearningThread
-
 IMPLEMENT_DYNCREATE(CLearningThread, CWinThread)
 
 CLearningThread::CLearningThread()
@@ -239,19 +238,25 @@ void CLearningThread::EndGame(std::optional<Color> winner, GameStats::Reason why
 
 void CLearningThread::OnNextMove(WPARAM, LPARAM)
 {
-	m_Tree.run_simulation();    // expands a fresh root, so the noise below has edges to act on
-	m_Tree.add_root_noise();    // exploration noise must be in place BEFORE the search it is meant to shape
-	for (size_t i = 1; i < SIMULATION_COUNT; ++i)
-		m_Tree.run_simulation();
+	ASSERT(!m_PossibleMoves.empty());
+	if (m_PossibleMoves.size() == 1)
+		MakeMove(m_PossibleMoves.front());
+	else
+	{
+		m_Tree.run_simulation();    // expands a fresh root, so the noise below has edges to act on
+		m_Tree.add_root_noise();    // exploration noise must be in place BEFORE the search it is meant to shape
+		for (size_t i = 1; i < SIMULATION_COUNT; ++i)
+			m_Tree.run_simulation();
 
-	double const q{ m_Tree.root_value() };   // mover's view; the last one logged belongs to the player who made the final move
-	m_QAbsMax = (std::max)(m_QAbsMax, std::abs(q));
-	m_QLast = q;
+		double const q{ m_Tree.root_value() };   // mover's view; the last one logged belongs to the player who made the final move
+		m_QAbsMax = (std::max)(m_QAbsMax, std::abs(q));
+		m_QLast = q;
 
-	m_Samples.push_back(MakeSample());
-	if (m_Samples.size() == 1)
-		m_FirstValue = m_Net.value();
-	MakeMove(m_Tree.select_move());
+		m_Samples.push_back(MakeSample());
+		if (m_Samples.size() == 1)
+			m_FirstValue = m_Net.value();
+		MakeMove(m_Tree.select_move());
+	}
 }
 
 void CLearningThread::OnHumanMove(WPARAM, LPARAM lp)
