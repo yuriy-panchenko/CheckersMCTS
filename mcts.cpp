@@ -4,9 +4,10 @@
 
 namespace mcts
 {
-	MCTS::MCTS(game::Checkers const& initial_state, NNet::topology const& topo, double _c_puct)
+	MCTS::MCTS(game::Checkers const& initial_state, callback&& cb, double _c_puct)
 		:root{ std::make_unique<Node>(initial_state) }
-		, m_Net{ topo }
+		//, pNet{ &_net }
+		, m_clbThink{ std::move(cb) }
 		, c_puct{ _c_puct }
 	{
 		m_Seen[initial_state.GetBoard().GetZipID()] = 1;
@@ -15,6 +16,7 @@ namespace mcts
 	MCTS& MCTS::operator=(MCTS&& oth)
 	{
 		root = std::move(oth.root);
+		m_clbThink = std::move(oth.m_clbThink);
 		c_puct = oth.c_puct;
 		m_Seen = std::move(oth.m_Seen);
 		return *this;
@@ -73,38 +75,6 @@ namespace mcts
 		++m_Seen[root->state.GetBoard().GetZipID()];
 	}
 
-	MCTS::loss_sum_result MCTS::learn(std::vector<game::Sample> && sms, double lcoo)
-	{
-		loss_sum_result ret{};
-
-		for (auto const& s : sms)
-		{
-			auto const pihat{ MCTS::mask_and_softmax(m_Net.policy_logits(), s.legal_indices) };
-
-			double policy_loss{};
-			for (auto idx : s.legal_indices)
-				policy_loss -= s.target_policy[idx] * std::log((std::max)(pihat[idx], 1e-8));
-
-			ret.policy += policy_loss;
-
-			double const y{ m_Net.value() };
-			ret.value += (y - s.outcome) * (y - s.outcome);   // reported against the pure outcome, comparable with earlier runs
-
-			std::vector dL_policy(896, .0);
-
-			for (auto idx : s.legal_indices)
-				dL_policy[idx] = pihat[idx] - s.target_policy[idx];
-
-			m_Net.learn(s.board, dL_policy, s.real_value);
-		}
-
-		m_Net.adjust(lcoo / sms.size());
-		ret.policy /= sms.size();
-		ret.value /= sms.size();
-
-		return ret;
-	}
-
 	double MCTS::expand(Node& node, std::vector<game::Move> const& legal_moves)
 	{
 		//node.expanded = true;
@@ -121,7 +91,7 @@ namespace mcts
 				node.edges.push_back(Edge{ int(idx), move.front(), .0 });
 		}
 
-		auto const out{ m_Net.think(node.state.encode_board()) };
+		auto const out{ m_clbThink(node.state.encode_board()) };
 		auto const priors{ mask_and_softmax(out.first, legal_indices) };
 
 		for (auto& e : node.edges)
@@ -192,7 +162,7 @@ namespace mcts
 		else
 		{
 			auto const id{ child.state.GetBoard().GetZipID() };
-			if (id.is_king_vs_king() /*|| id.is_king_vs_king(2) */ || seen(id) + 1 >= stale_limit)
+			if (id.is_king_vs_king() /*|| id.is_king_vs_king(2) */|| seen(id) + 1 >= stale_limit)
 				out = { draw_value, true };                 // king vs king, or this would be the 3rd occurrence: a draw
 			else
 			{

@@ -58,10 +58,7 @@ protected:
 	afx_msg void OnUpdateIdsIndicatorLearns(CCmdUI* pCmdUI);
 	afx_msg void OnWhiteHuman();
 	afx_msg void OnUpdateWhiteHuman(CCmdUI* pCmdUI);
-	afx_msg void OnNewGame();
-	afx_msg void OnUpdateNewGame(CCmdUI* pCmdUI);
-	afx_msg void OnNextStep();
-	afx_msg void OnUpdateNextStep(CCmdUI* pCmdUI);
+	afx_msg void OnShock();
 	DECLARE_MESSAGE_MAP()
 
 #ifdef SHARED_HANDLERS

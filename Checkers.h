@@ -14,6 +14,15 @@
 // See Checkers.cpp for the implementation of this class
 // 
 //
+struct Sample
+{
+	game::Color mover;          // needed to assign correct-signed outcome later
+	std::vector<double> board;                  // state.encode_board(), from mover's perspective
+	std::unordered_set<size_t> legal_indices;
+	std::vector<double> target_policy;          // size 896, visit_distribution: N_i / ΣN over root edges, 0 elsewhere
+	double real_value = .0;                     // value TARGET used for training (mix of outcome and material)
+	double outcome = .0;                        // pure game outcome from mover's perspective, kept only for reporting
+};
 
 class CCheckersApp : public CWinAppEx
 {

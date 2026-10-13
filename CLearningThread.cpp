@@ -14,7 +14,7 @@ using namespace mcts;
 #else
 #define SIMULATION_COUNT	(1'000)
 #endif
-#define LEARNING_RATE	(.1)
+#define LEARNING_RATE	(.0007)
 // value target = lambda*outcome + (1-lambda)*tanh(material/MATERIAL_SCALE); lambda ramps up so material fades out
 #define VALUE_MIX_START	(.3)
 #define VALUE_MIX_GAMES	(1500.)
@@ -33,7 +33,8 @@ static const NNet::topology g_Topology
 IMPLEMENT_DYNCREATE(CLearningThread, CWinThread)
 
 CLearningThread::CLearningThread()
-	:m_Tree{ Checkers{ Color::White }, g_Topology }
+	:m_Tree{ Checkers{ Color::White }, { [this](auto const& inp) {return F1(inp); }} }
+	, m_Net{ g_Topology }
 {}
 
 CLearningThread::~CLearningThread()
@@ -49,9 +50,11 @@ BOOL CLearningThread::InitInstance()
 #endif // DEBUG
 	m_Stats.load_csv(STATS_FILENAME);
 
+	m_Net.init();
+
 	std::ifstream s{ NNET_FILENAME, std::ios::binary };
 	if (s)
-		try { s >> m_Tree.net(); }
+		try { s >> m_Net; }
 	catch (const std::exception& e)
 	{
 		::MessageBox(NULL, CA2W{ e.what() }, _T("Error loading nnet!"), MB_OK | MB_ICONERROR);
@@ -95,8 +98,8 @@ void CLearningThread::Publish()
 		m_View.gameCount = m_uGameCount;
 		m_View.moveCount = m_uMoveCount;
 		m_View.quiet = m_Tree.root_quiet();
-		m_View.adjusts = m_Tree.net().get_adjusts();
-		m_View.learns = m_Tree.net().get_learns();
+		m_View.adjusts = m_Net.get_adjusts();
+		m_View.learns = m_Net.get_learns();
 	}
 	if (auto const h{ m_hNotify.load() })
 		::PostMessage(h, WM_MOVE_FINISHED, 0, 0);
@@ -218,7 +221,7 @@ void CLearningThread::EndGame(std::optional<Color> winner, GameStats::Reason why
 
 	std::ofstream s{ NNET_FILENAME, std::ios::binary };
 	if (s)
-		try { s << m_Tree.net(); }
+		try { s << m_Net; }
 	catch (const std::exception& e)
 	{
 		::MessageBox(NULL, CA2W{ e.what() }, _T("Error saving nnet!"), MB_OK | MB_ICONERROR);
@@ -251,7 +254,7 @@ void CLearningThread::OnNextMove(WPARAM, LPARAM)
 
 		m_Samples.push_back(MakeSample());
 		if (m_Samples.size() == 1)
-			m_FirstValue = m_Tree.net().value();
+			m_FirstValue = m_Net.value();
 		MakeMove(m_Tree.select_move());
 	}
 }
@@ -265,7 +268,7 @@ void CLearningThread::OnHumanMove(WPARAM, LPARAM lp)
 
 void CLearningThread::OnNewGame(WPARAM, LPARAM)
 {
-	m_Tree = MCTS{ Color::Black , g_Topology };
+	m_Tree = MCTS{ { Color::Black },std::function<NNet::out_pair(MCTS::vdb const&)>{ [this](auto const& inp) {return F1(inp); } } };
 	m_Samples.clear();
 
 	m_FirstValue = .0;
@@ -286,11 +289,36 @@ void CLearningThread::OnNewGame(WPARAM, LPARAM)
 	MakeMove({});
 }
 
-MCTS::loss_sum_result CLearningThread::TrainOnSamples(std::optional<game::Color> winner)
+std::pair<double, double> CLearningThread::TrainOnSamples(std::optional<game::Color> winner)
 {
+	double policy_loss_sum{}, value_loss_sum{};
 	ASSERT(!m_Samples.empty());
-	auto res{ m_Tree.learn(std::move(m_Samples), LEARNING_RATE) };
 
+	for (auto const& s : m_Samples)
+	{
+		m_Net.think(s.board);
+		auto const pihat{ MCTS::mask_and_softmax(m_Net.policy_logits(), s.legal_indices) };
+
+		double policy_loss{};
+		for (auto idx : s.legal_indices)
+			policy_loss -= s.target_policy[idx] * std::log((std::max)(pihat[idx], 1e-8));
+
+		policy_loss_sum += policy_loss;
+
+		double const y{ m_Net.value() };
+		value_loss_sum += (y - s.outcome) * (y - s.outcome);   // reported against the pure outcome, comparable with earlier runs
+
+		std::vector dL_policy(896, .0);
+
+		for (auto idx : s.legal_indices)
+			dL_policy[idx] = pihat[idx] - s.target_policy[idx];
+
+		m_Net.learn(s.board, dL_policy, s.real_value);
+	}
+
+	m_Net.adjust(LEARNING_RATE / m_Samples.size());
+
+	auto const n{ double(m_Samples.size()) };
 	CString str;
 	str.Format(_T("%I64u: %s [ %I64u:%I64u ] %zu moves, avg policy loss=%.4f, avg value loss=%.4f, value=%.4f"),
 		m_uGameCount,
@@ -298,14 +326,20 @@ MCTS::loss_sum_result CLearningThread::TrainOnSamples(std::optional<game::Color>
 		m_winWhite,
 		m_winBlack,
 		m_Samples.size(),
-		res.policy, res.value,
+		policy_loss_sum / n, value_loss_sum / n,
 		m_FirstValue
 	);
 	{
 		std::lock_guard lk{ m_mtx };
 		m_View.debug.push_back(str);
-		m_View.chart.push_back(res.policy);
+		m_View.chart.push_back(policy_loss_sum / n);
 	}
 
-	return res;
+	m_Samples.clear();
+	return { policy_loss_sum / n, value_loss_sum / n };
+}
+
+NNet::out_pair CLearningThread::F1(std::vector<double> const& inp)
+{
+	return m_Net.think(inp);
 }
