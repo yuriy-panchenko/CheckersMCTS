@@ -8,15 +8,6 @@
 using namespace game;
 using namespace mcts;
 
-#define MATCH_GAMES			(100)	//	games per opponent, colours alternate
-#define MATCH_PROMOTE		(.60)	//	score needed to become / replace the champion
-#define MATCH_RANDOM_PLIES	(4u)		//	opening plies played at random, otherwise two deterministic nets replay one game
-#define MATCH_MAX_PLIES		(400u)	//	safety net: a game that long is a draw
-#ifdef _DEBUG
-#define MATCH_SIMS			(50u)
-#else
-#define MATCH_SIMS			(200u)	//	simulations per move, deliberately lower than self-play
-#endif
 #define CHAMPION_FILENAME	_T("champion.bin")
 #define MATCHES_FILENAME	_T("matches.csv")
 
@@ -33,16 +24,16 @@ BOOL CMatchThread::InitInstance()
 	std::ifstream s{ CHAMPION_FILENAME, std::ios::binary };
 	if (s)
 		try
-	{
-		auto n{ std::make_unique<NNet>() };
-		s >> *n;		//	adopts the shape stored in the file
-		m_pChampion = std::move(n);
-	}
-	catch (const std::exception&)
-	{
-		m_pChampion.reset();	//	unreadable (old format?): start without a champion
-	}
-	return TRUE;
+		{
+			auto n{ std::make_unique<NNet>() };
+			s >> *n;		//	adopts the shape stored in the file
+			m_pChampion = std::move(n);
+		}
+		catch (const std::exception&)
+		{
+			m_pChampion.reset();	//	unreadable (old format?): start without a champion
+		}
+		return TRUE;
 }
 
 int CMatchThread::ExitInstance()
@@ -112,6 +103,11 @@ MatchScore CMatchThread::PlayMatch(NNet& a, NNet* b)
 		case  0: ++sc.d; break;
 		case -1: ++sc.l; break;
 		}
+
+		auto ptr{ std::make_unique<MatchScore>(sc) };
+		if (auto const h{ m_hNotify.load() })
+			if (::PostMessage(h, WM_MATCH_SCORE, 0, reinterpret_cast<LPARAM>(ptr.get())))
+				ptr.release();
 	}
 	return sc;
 }

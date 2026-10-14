@@ -62,7 +62,7 @@ BOOL CLearningThread::InitInstance()
 	}
 
 	//	background matches: low priority, same notify window as ours
-	m_pMatchTh = static_cast<CMatchThread*>(::AfxBeginThread(RUNTIME_CLASS(CMatchThread), THREAD_PRIORITY_BELOW_NORMAL, 0, CREATE_SUSPENDED));
+	m_pMatchTh = static_cast<CMatchThread*>(::AfxBeginThread(RUNTIME_CLASS(CMatchThread), 0, 0, CREATE_SUSPENDED));
 	if (m_pMatchTh)
 	{
 		m_pMatchTh->SetNotifyWnd(m_hNotify.load());

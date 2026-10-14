@@ -53,6 +53,7 @@ int COutputWnd::OnCreate(LPCREATESTRUCT lpCreateStruct)
 		|| !m_wndChart.Create(NULL, NULL, WS_CHILD | WS_VISIBLE, CRect{}, &m_wndTabs, ID_CHART_WND)
 		|| !m_wndChampChart.Create(NULL, NULL, WS_CHILD | WS_VISIBLE, CRect{}, &m_wndTabs, ID_CHAMP_CHART_WND)
 		|| !m_wndAnchorChart.Create(NULL, NULL, WS_CHILD | WS_VISIBLE, CRect{}, &m_wndTabs, ID_ANCHOR_CHART_WND)
+		|| !m_wndMatch.Create(NULL, NULL, WS_CHILD | WS_VISIBLE, CRect{}, &m_wndTabs, ID_MATCH_WND)
 		/*
 		||!m_wndOutputFind.Create(dwStyle, rectDummy, &m_wndTabs, 4)*/)
 	{
@@ -79,15 +80,17 @@ int COutputWnd::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	// Attach list windows to tab:
 	bNameValid = strTabName.LoadString(IDS_BUILD_TAB);
 	ASSERT(bNameValid);
-	m_wndTabs.AddTab(&m_wndOutputBuild, strTabName, (UINT)0);
+	UINT u{};
+	m_wndTabs.AddTab(&m_wndOutputBuild, strTabName, u++);
 
 	bNameValid = strTabName.LoadString(IDS_DEBUG_TAB);
 	ASSERT(bNameValid);
-	m_wndTabs.AddTab(&m_wndOutputDebug, strTabName, (UINT)1);
+	m_wndTabs.AddTab(&m_wndOutputDebug, strTabName, u++);
 
 	m_wndTabs.AddTab(&m_wndChart, _T("Chart"), 2u);
-	m_wndTabs.AddTab(&m_wndChampChart, _T("Vs champion"), 3u);
-	m_wndTabs.AddTab(&m_wndAnchorChart, _T("Vs random"), 4u);
+	m_wndTabs.AddTab(&m_wndChampChart, _T("Vs champion"), u++);
+	m_wndTabs.AddTab(&m_wndAnchorChart, _T("Vs random"), u++);
+	m_wndTabs.AddTab(&m_wndMatch, _T("Match"), u++);
 	/*
 	bNameValid = strTabName.LoadString(IDS_FIND_TAB);
 	ASSERT(bNameValid);
@@ -113,6 +116,12 @@ int COutputWnd::OnCreate(LPCREATESTRUCT lpCreateStruct)
 void COutputWnd::SetSummary(CString const& text)
 {
 	m_wndSummary.SetWindowText(text);
+}
+
+void COutputWnd::SetMatchScore(MatchScore const& score)
+{
+	m_wndMatch.m_Score = score;
+	m_wndMatch.Invalidate();
 }
 
 void COutputWnd::OnSize(UINT nType, int cx, int cy)
@@ -188,8 +197,10 @@ void COutputWnd::AddChartData(double db)
 	m_wndChart.Add(db);
 }
 
-void COutputWnd::AddMatchData(double vsChampion, double vsRandom)
+void COutputWnd::AddMatchData(MatchResult const& r)
 {
+	double vsChampion = r.hadChampion ? r.vsChampion.value() : std::numeric_limits<double>::quiet_NaN();
+	double vsRandom = r.vsRandom.value();
 	if (!std::isnan(vsChampion))
 	{
 		m_wndChampChart.Add(vsChampion);
@@ -198,6 +209,10 @@ void COutputWnd::AddMatchData(double vsChampion, double vsRandom)
 			m_wndChampChart.Save(s);
 	}
 	m_wndAnchorChart.Add(vsRandom);
+
+	m_wndMatch.m_Result = r;
+	m_wndMatch.Invalidate();
+
 	std::ofstream s{ ANCHOR_CHART_FILENAME, std::ios::binary };
 	if (s)
 		m_wndAnchorChart.Save(s);

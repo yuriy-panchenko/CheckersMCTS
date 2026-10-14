@@ -57,7 +57,7 @@ CCheckersDoc::CCheckersDoc() noexcept
 {
 	m_isWhiteHuman = theApp.GetProfileInt(section_key, white_human, TRUE);
 	m_isBlackHuman = theApp.GetProfileInt(section_key, black_human, FALSE);
-	//m_isWhiteHuman = m_isBlackHuman = TRUE;
+	m_bRunning = !(m_isBlackHuman || m_isWhiteHuman);
 }
 
 game::Board const& CCheckersDoc::GetBoard() const
@@ -136,7 +136,7 @@ void CCheckersDoc::OnMatchFinished(MatchResult const& r)
 	str.Format(_T("MATCH @%zu: %svs random +%d =%d -%d: %.3f%s"), r.trainGames, (LPCTSTR)champ,
 		r.vsRandom.w, r.vsRandom.d, r.vsRandom.l, r.vsRandom.value(), r.promoted ? _T(" | NEW CHAMPION") : _T(""));
 	out.AddDebugString(str);
-	out.AddMatchData(r.hadChampion ? r.vsChampion.value() : std::numeric_limits<double>::quiet_NaN(), r.vsRandom.value());
+	out.AddMatchData(r);
 }
 
 void CCheckersDoc::OnMoveFinished()

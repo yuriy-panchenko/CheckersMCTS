@@ -5,10 +5,21 @@
 #include "defines.h"
 #include "mcts.h"
 
+#define MATCH_GAMES			(50)	//	games per opponent, colours alternate
+#define MATCH_PROMOTE		(.60)	//	score needed to become / replace the champion
+#define MATCH_RANDOM_PLIES	(4u)		//	opening plies played at random, otherwise two deterministic nets replay one game
+#define MATCH_MAX_PLIES		(400u)	//	safety net: a game that long is a draw
+#ifdef _DEBUG
+#define MATCH_SIMS			(50u)
+#else
+#define MATCH_SIMS			(1000u)	//	simulations per move, deliberately lower than self-play
+#endif
+
 //	learning thread -> match thread
 constexpr UINT WM_RUN_MATCH{ WM_APP + 0x0010 };			//	LPARAM = new MatchJob*, the thread deletes it
 //	match thread -> UI (posted to the notify window)
 constexpr UINT WM_MATCH_FINISHED{ WM_APP + 0x0011 };	//	LPARAM = new MatchResult*, the receiver deletes it
+constexpr UINT WM_MATCH_SCORE{ WM_APP + 0x0012 };	//	LPARAM = new MatchScore*, the receiver deletes it
 
 //	a frozen copy of the net being tested; the match thread is its only user
 struct MatchJob

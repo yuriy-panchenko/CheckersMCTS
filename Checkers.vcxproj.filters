@@ -66,6 +66,9 @@
     <ClInclude Include="GameStats.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="CMatchWnd.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Checkers.cpp">
@@ -102,6 +105,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="CMatchThread.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="CMatchWnd.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

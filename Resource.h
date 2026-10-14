@@ -50,6 +50,7 @@
 #define ID_OUTPUT_DEBUG                 313
 #define ID_CHAMP_CHART_WND              314
 #define ID_ANCHOR_CHART_WND             315
+#define ID_MATCH_WND                    316
 #define ID_START_PAUSE                  32772
 #define ID_WHITE_HUMAN                  32775
 #define ID_START_LEARNING_THREAD        32776
@@ -62,6 +63,6 @@
 #define _APS_NEXT_RESOURCE_VALUE        310
 #define _APS_NEXT_COMMAND_VALUE         32778
 #define _APS_NEXT_CONTROL_VALUE         1000
-#define _APS_NEXT_SYMED_VALUE           316
+#define _APS_NEXT_SYMED_VALUE           317
 #endif
 #endif

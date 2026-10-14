@@ -4,6 +4,7 @@
 /////////////////////////////////////////////////////////////////////////////
 // COutputList window
 #include "CChatWnd.h"
+#include "CMatchWnd.h"
 class COutputList : public CListBox
 {
 	// Construction
@@ -37,8 +38,9 @@ public:
 	void RemoveBuildString();
 	void ClearBuild();
 	void SaveChartData();
-	void AddMatchData(double vsChampion, double vsRandom);	//	NaN = no champion yet, nothing added to that chart
+	void AddMatchData(MatchResult const &);	//	NaN = no champion yet, nothing added to that chart
 	void SetSummary(CString const&);
+	void SetMatchScore(MatchScore const&);
 
 	// Attributes
 protected:
@@ -47,9 +49,8 @@ protected:
 
 	COutputList m_wndOutputBuild;
 	COutputList m_wndOutputDebug;
-	CChatWnd m_wndChart;
-	CChatWnd m_wndChampChart, m_wndAnchorChart;	//	challenger score vs champion / vs random, one point per match
-	//COutputList m_wndOutputFind;
+	CChatWnd m_wndChart, m_wndChampChart, m_wndAnchorChart;	//	challenger score vs champion / vs random, one point per match
+	CMatchWnd m_wndMatch;
 
 protected:
 	void FillBuildWindow();
