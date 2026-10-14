@@ -8,7 +8,7 @@
 using namespace game;
 using namespace mcts;
 
-#define MATCH_GAMES			(40)	//	games per opponent, colours alternate
+#define MATCH_GAMES			(100)	//	games per opponent, colours alternate
 #define MATCH_PROMOTE		(.60)	//	score needed to become / replace the champion
 #define MATCH_RANDOM_PLIES	(4u)		//	opening plies played at random, otherwise two deterministic nets replay one game
 #define MATCH_MAX_PLIES		(400u)	//	safety net: a game that long is a draw
