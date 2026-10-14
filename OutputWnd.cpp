@@ -118,10 +118,14 @@ void COutputWnd::SetSummary(CString const& text)
 	m_wndSummary.SetWindowText(text);
 }
 
-void COutputWnd::SetMatchScore(MatchScore const& score)
+void COutputWnd::SetMatchScore(BOOL vsNet, MatchScore const& score)
 {
-	m_wndMatch.m_Score = score;
-	m_wndMatch.Invalidate();
+	m_wndMatch.SetScore(vsNet, score);
+}
+
+void COutputWnd::ResetMatchWnd(size_t id)
+{
+	m_wndMatch.Reset(id);
 }
 
 void COutputWnd::OnSize(UINT nType, int cx, int cy)
@@ -210,8 +214,7 @@ void COutputWnd::AddMatchData(MatchResult const& r)
 	}
 	m_wndAnchorChart.Add(vsRandom);
 
-	m_wndMatch.m_Result = r;
-	m_wndMatch.Invalidate();
+	m_wndMatch.SetResult(r);
 
 	std::ofstream s{ ANCHOR_CHART_FILENAME, std::ios::binary };
 	if (s)

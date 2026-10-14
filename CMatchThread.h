@@ -20,6 +20,7 @@ constexpr UINT WM_RUN_MATCH{ WM_APP + 0x0010 };			//	LPARAM = new MatchJob*, the
 //	match thread -> UI (posted to the notify window)
 constexpr UINT WM_MATCH_FINISHED{ WM_APP + 0x0011 };	//	LPARAM = new MatchResult*, the receiver deletes it
 constexpr UINT WM_MATCH_SCORE{ WM_APP + 0x0012 };	//	LPARAM = new MatchScore*, the receiver deletes it
+constexpr UINT WM_MATCH_STARTED{ WM_APP + 0x0013 };	//	LPARAM = game bunch (id)
 
 //	a frozen copy of the net being tested; the match thread is its only user
 struct MatchJob
@@ -85,5 +86,5 @@ private:
 	size_t m_uChampionGame{};
 	std::mt19937 m_Rng{ std::random_device{}() };
 	std::atomic<bool> m_bStop{ false }, m_bBusy{ false };
-	std::atomic<HWND> m_hNotify{ nullptr };
+	std::atomic<HWND> m_hNotify{ NULL };
 };

@@ -257,6 +257,7 @@
   </ItemGroup>
   <ItemGroup>
     <Text Include="Architecture.txt" />
+    <Text Include="ToDo.txt" />
   </ItemGroup>
   <ItemGroup>
     <Natvis Include="NatvisFile.natvis" />

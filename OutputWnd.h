@@ -40,7 +40,8 @@ public:
 	void SaveChartData();
 	void AddMatchData(MatchResult const &);	//	NaN = no champion yet, nothing added to that chart
 	void SetSummary(CString const&);
-	void SetMatchScore(MatchScore const&);
+	void SetMatchScore(BOOL vsNet, MatchScore const&);
+	void ResetMatchWnd(size_t);
 
 	// Attributes
 protected:

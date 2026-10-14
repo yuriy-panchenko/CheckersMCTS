@@ -61,6 +61,8 @@ bool CMatchThread::Submit(std::unique_ptr<MatchJob> job)
 void CMatchThread::OnRunMatch(WPARAM, LPARAM lp)
 {
 	std::unique_ptr<MatchJob> job{ reinterpret_cast<MatchJob*>(lp) };
+	if (auto const h{ m_hNotify.load() })
+		::PostMessage(h, WM_MATCH_STARTED, 0, static_cast<LPARAM>(job->trainGames));
 
 	auto res{ std::make_unique<MatchResult>() };
 	res->trainGames = job->trainGames;
@@ -106,7 +108,7 @@ MatchScore CMatchThread::PlayMatch(NNet& a, NNet* b)
 
 		auto ptr{ std::make_unique<MatchScore>(sc) };
 		if (auto const h{ m_hNotify.load() })
-			if (::PostMessage(h, WM_MATCH_SCORE, 0, reinterpret_cast<LPARAM>(ptr.get())))
+			if (::PostMessage(h, WM_MATCH_SCORE, reinterpret_cast<WPARAM>(b), reinterpret_cast<LPARAM>(ptr.get())))
 				ptr.release();
 	}
 	return sc;
@@ -118,8 +120,11 @@ int CMatchThread::PlayGame(NNet& a, NNet* b, Color aColor)
 	struct Side { NNet* net; std::unique_ptr<MCTS> tree; };
 	auto const make{ [](NNet* n)
 		{
-			MCTS::callback cb{ [n](MCTS::vdb const& inp) -> MCTS::out_nnet { return n ? n->think(inp) : MCTS::out_nnet{}; } };
-			return std::make_unique<MCTS>(Checkers{ Color::Black }, std::move(cb));
+			return std::make_unique<MCTS>(Checkers{ Color::Black },
+				[n](MCTS::vdb const& inp) -> MCTS::out_nnet
+				{
+					return n ? n->think(inp) : MCTS::out_nnet{};
+				});
 		} };
 	Side side[2]{ { &a, make(&a) }, { b, make(b) } };
 

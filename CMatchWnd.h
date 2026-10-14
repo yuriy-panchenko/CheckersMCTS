@@ -11,12 +11,17 @@ public:
 	CMatchWnd();
 	virtual ~CMatchWnd();
 
-	MatchResult m_Result;
-	MatchScore m_Score;
+	void SetResult(MatchResult const&);
+	void SetScore(BOOL vsNet, MatchScore const&);
+	void Reset(size_t);
 
 protected:
 	afx_msg void OnPaint();
 	DECLARE_MESSAGE_MAP()
+
+private:
+	MatchResult m_Result;
+	BOOL m_bCompleted;
 };
 
 

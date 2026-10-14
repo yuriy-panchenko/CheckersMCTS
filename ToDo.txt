@@ -1,0 +1,3 @@
+Save match best network results along with weights. load upon initialising.
+Remove 'Score' table and display 'Result' only.
+Display 2 results, current and best
