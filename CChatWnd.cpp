@@ -5,6 +5,7 @@
 #include "Checkers.h"
 #include "CChatWnd.h"
 
+#define MA_WINDOW	(20)
 // CChatWnd
 
 IMPLEMENT_DYNAMIC(CChatWnd, CWnd)
@@ -118,7 +119,6 @@ void CChatWnd::OnPaint()
 	memDC.SelectObject(bmp);
 
 	Draw(memDC, { canvas.Width(), canvas.Height() });
-	DrawLegend(memDC, { canvas.Width(), canvas.Height() });
 
 	/*memDC.SelectObject(m_penLine);
 	memDC.MoveTo(100, 100);
@@ -134,10 +134,6 @@ void CChatWnd::OnPaint()
 
 void CChatWnd::Draw(CDC& dc, CSize const canv)
 {
-	if (m_Data.size() < 2)
-		return;
-	if (m_bFixed)		//	scores live in 0..1; a fixed scale keeps the picture comparable between matches
-		m_Min = m_FixedMin, m_Max = m_FixedMax;
 	if (m_Max == m_Min)
 		return;
 
@@ -253,7 +249,7 @@ void CChatWnd::Draw(CDC& dc, CSize const canv)
 	for (int i = 0; i < m_Data.size(); ++i)
 	{
 		double sum{};
-		auto const from{ (std::max)(0, i - m_nMa) };
+		auto const from{ (std::max)(0, i - MA_WINDOW) };
 		auto u{ from };
 		for (; u <= i; ++u)
 			sum += m_Data[u];
@@ -264,75 +260,4 @@ void CChatWnd::Draw(CDC& dc, CSize const canv)
 			dc.LineTo(pnt);
 		else dc.MoveTo(pnt);
 	}
-}
-
-void CChatWnd::DrawLegend(CDC& dc, CSize const canv)
-{
-	if (m_strTitle.IsEmpty())
-		return;
-
-	constexpr int pad{ 8 }, key_len{ 28 };
-	int const max_w{ max(200, canv.cx / 2) };
-
-	dc.SetBkMode(TRANSPARENT);
-	auto const oldFont{ dc.SelectObject(&m_fontMajor) };
-
-	CRect rcTitle{ 0, 0, max_w, 0 };
-	dc.DrawText(m_strTitle, rcTitle, DT_CALCRECT | DT_WORDBREAK);
-
-	dc.SelectObject(&m_fontMinor);
-	CString key1, key2;
-	key1 = _T("raw value (one point per entry)");
-	key2.Format(_T("moving average of the last %d points"), m_nMa + 1);
-	CRect rcKey{ 0, 0, max_w - key_len - 6, 0 };
-	dc.DrawText(key1, rcKey, DT_CALCRECT | DT_SINGLELINE);
-	CRect rcKey2{ 0, 0, max_w - key_len - 6, 0 };
-	dc.DrawText(key2, rcKey2, DT_CALCRECT | DT_SINGLELINE);
-	int const line_h{ (std::max)(rcKey.Height(), 14) };
-
-	CRect rcHint{ 0, 0, max_w, 0 };
-	if (!m_strHint.IsEmpty())
-		dc.DrawText(m_strHint, rcHint, DT_CALCRECT | DT_WORDBREAK);
-
-	int const box_w{ (std::max)({ (int)rcTitle.Width(), key_len + 6 + (std::max)(rcKey.Width(), rcKey2.Width()), (int)rcHint.Width() }) + 2 * pad };
-	int const box_h{ pad + rcTitle.Height() + 4 + 2 * (line_h + 2) + (m_strHint.IsEmpty() ? 0 : 6 + rcHint.Height()) + pad };
-	CRect box{ pad, pad, pad + box_w, pad + box_h };
-
-	dc.FillSolidRect(box, RGB(18, 18, 24));
-	CBrush brFrame{ RGB(90, 90, 100) };
-	dc.FrameRect(box, &brFrame);
-
-	int y{ box.top + pad };
-	dc.SelectObject(&m_fontMajor);
-	dc.SetTextColor(m_colMajor);
-	CRect r{ box.left + pad, y, box.right - pad, y + rcTitle.Height() };
-	dc.DrawText(m_strTitle, r, DT_WORDBREAK);
-	y += rcTitle.Height() + 4;
-
-	dc.SelectObject(&m_fontMinor);
-	dc.SetTextColor(RGB(190, 190, 200));
-
-	auto const x0{ box.left + pad };
-	auto const key_row = [&](CPen& pen, CString const& text)
-		{
-			auto const old{ dc.SelectObject(&pen) };
-			dc.MoveTo(x0, y + line_h / 2);
-			dc.LineTo(x0 + key_len, y + line_h / 2);
-			dc.SelectObject(old);
-			CRect rt{ x0 + key_len + 6, y, box.right - pad, y + line_h };
-			dc.DrawText(text, rt, DT_SINGLELINE | DT_VCENTER);
-			y += line_h + 2;
-		};
-	key_row(m_penLine, key1);
-	key_row(m_penMA, key2);
-
-	if (!m_strHint.IsEmpty())
-	{
-		y += 6 - 2;
-		dc.SetTextColor(m_colMinor);
-		CRect rh{ x0, y, box.right - pad, y + rcHint.Height() };
-		dc.DrawText(m_strHint, rh, DT_WORDBREAK);
-	}
-
-	dc.SelectObject(oldFont);
 }

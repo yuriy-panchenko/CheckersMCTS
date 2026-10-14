@@ -16,7 +16,7 @@ using namespace mcts;
 #endif
 #define LEARNING_RATE	(.0007)
 // value target = lambda*outcome + (1-lambda)*tanh(material/MATERIAL_SCALE); lambda ramps up so material fades out
-#define VALUE_MIX_START	(.1)
+#define VALUE_MIX_START	(.3)
 #define VALUE_MIX_GAMES	(1500.)
 #define MATERIAL_SCALE	(4.)
 #define MATCH_EVERY	(100)	//	training games between background matches (see CMatchThread.cpp)
