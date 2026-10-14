@@ -366,3 +366,8 @@ FodyWeavers.xsd
 /temp/chart.bin
 /temp/games.csv
 /temp/net.bin
+/games.csv
+/matches.csv
+/champion.bin
+/champion_chart.bin
+/anchor_chart.bin
