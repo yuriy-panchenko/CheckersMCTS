@@ -45,6 +45,7 @@ BEGIN_MESSAGE_MAP(CCheckersView, CView)
 	ON_WM_SIZE()
 	ON_WM_LBUTTONDOWN()
 	ON_MESSAGE(WM_MOVE_FINISHED, &OnMoveFinished)
+	ON_MESSAGE(WM_MATCH_FINISHED, &OnMatchFinished)
 END_MESSAGE_MAP()
 
 // CCheckersView construction/destruction
@@ -371,6 +372,13 @@ void CCheckersView::OnLButtonDown(UINT nFlags, CPoint point)
 LRESULT CCheckersView::OnMoveFinished(WPARAM, LPARAM)
 {
 	GetDocument()->OnMoveFinished();
+	return 0;
+}
+
+LRESULT CCheckersView::OnMatchFinished(WPARAM, LPARAM lp)
+{
+	std::unique_ptr<MatchResult> r{ reinterpret_cast<MatchResult*>(lp) };
+	GetDocument()->OnMatchFinished(*r);
 	return 0;
 }
 

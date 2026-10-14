@@ -126,6 +126,19 @@ void CCheckersDoc::Kick()
 	m_bBusy = m_pLearnTh->PostThreadMessage(WM_NEXT_MOVE, 0, 0);
 }
 
+void CCheckersDoc::OnMatchFinished(MatchResult const& r)
+{
+	auto& out{ static_cast<CMainFrame*>(theApp.GetMainWnd())->GetOutputWnd() };
+
+	CString str, champ;
+	if (r.hadChampion)
+		champ.Format(_T("vs champion (since game %zu) +%d =%d -%d: %.3f | "), r.championGame, r.vsChampion.w, r.vsChampion.d, r.vsChampion.l, r.vsChampion.value());
+	str.Format(_T("MATCH @%zu: %svs random +%d =%d -%d: %.3f%s"), r.trainGames, (LPCTSTR)champ,
+		r.vsRandom.w, r.vsRandom.d, r.vsRandom.l, r.vsRandom.value(), r.promoted ? _T(" | NEW CHAMPION") : _T(""));
+	out.AddDebugString(str);
+	out.AddMatchData(r.hadChampion ? r.vsChampion.value() : std::numeric_limits<double>::quiet_NaN(), r.vsRandom.value());
+}
+
 void CCheckersDoc::OnMoveFinished()
 {
 	if (!m_pLearnTh)

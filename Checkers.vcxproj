@@ -204,6 +204,7 @@
     <ClInclude Include="CheckersDoc.h" />
     <ClInclude Include="CheckersView.h" />
     <ClInclude Include="CLearningThread.h" />
+    <ClInclude Include="CMatchThread.h" />
     <ClInclude Include="defines.h" />
     <ClInclude Include="desc_tree.h" />
     <ClInclude Include="framework.h" />
@@ -222,6 +223,7 @@
     <ClCompile Include="CheckersDoc.cpp" />
     <ClCompile Include="CheckersView.cpp" />
     <ClCompile Include="CLearningThread.cpp" />
+    <ClCompile Include="CMatchThread.cpp" />
     <ClCompile Include="defines.cpp" />
     <ClCompile Include="MainFrm.cpp" />
     <ClCompile Include="mcts.cpp" />

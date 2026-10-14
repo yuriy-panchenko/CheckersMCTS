@@ -23,6 +23,7 @@ public:
 	game::Move FindMove(game::Position from, game::Position to)const;
 	void HumanMove(game::Move const&);		//	view -> thread
 	void OnMoveFinished();					//	thread -> UI, called from the view on WM_MOVE_FINISHED
+	void OnMatchFinished(MatchResult const&);	//	match thread -> UI, called from the view on WM_MATCH_FINISHED
 	// Operations
 public:
 

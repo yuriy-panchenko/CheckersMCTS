@@ -5,6 +5,7 @@
 #include "mcts.h"
 #include "GameStats.h"
 #include "Checkers.h"
+#include "CMatchThread.h"
 
 //	UI -> thread
 constexpr UINT WM_NEXT_MOVE{ WM_APP + 0x0001 };		//	AI picks and plays the move for the side to move
@@ -78,6 +79,7 @@ private:
 	size_t m_MaxRepeats{};
 	double m_QAbsMax{}, m_QLast{};   // largest |root value| in the game; root value at the final move
 	bool m_bOver{};
+	CMatchThread* m_pMatchTh{};	//	background matches; auto-deleting thread, we only wait on it
 	std::optional<game::Color> m_Winner;
 
 	//	shared with the UI

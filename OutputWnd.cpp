@@ -13,6 +13,8 @@ static char THIS_FILE[] = __FILE__;
 #endif
 
 #define CHART_DATA_FILENAME	_T("chart.bin")
+#define CHAMP_CHART_FILENAME	_T("champion_chart.bin")
+#define ANCHOR_CHART_FILENAME	_T("anchor_chart.bin")
 
 /////////////////////////////////////////////////////////////////////////////
 // COutputBar
@@ -49,6 +51,8 @@ int COutputWnd::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	if (!m_wndOutputBuild.Create(dwStyle, rectDummy, &m_wndTabs, ID_OUTPUT_BUILD)
 		|| !m_wndOutputDebug.Create(dwStyle, rectDummy, &m_wndTabs, ID_OUTPUT_DEBUG)
 		|| !m_wndChart.Create(NULL, NULL, WS_CHILD | WS_VISIBLE, CRect{}, &m_wndTabs, ID_CHART_WND)
+		|| !m_wndChampChart.Create(NULL, NULL, WS_CHILD | WS_VISIBLE, CRect{}, &m_wndTabs, ID_CHAMP_CHART_WND)
+		|| !m_wndAnchorChart.Create(NULL, NULL, WS_CHILD | WS_VISIBLE, CRect{}, &m_wndTabs, ID_ANCHOR_CHART_WND)
 		/*
 		||!m_wndOutputFind.Create(dwStyle, rectDummy, &m_wndTabs, 4)*/)
 	{
@@ -82,6 +86,8 @@ int COutputWnd::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	m_wndTabs.AddTab(&m_wndOutputDebug, strTabName, (UINT)1);
 
 	m_wndTabs.AddTab(&m_wndChart, _T("Chart"), 2u);
+	m_wndTabs.AddTab(&m_wndChampChart, _T("Vs champion"), 3u);
+	m_wndTabs.AddTab(&m_wndAnchorChart, _T("Vs random"), 4u);
 	/*
 	bNameValid = strTabName.LoadString(IDS_FIND_TAB);
 	ASSERT(bNameValid);
@@ -94,6 +100,12 @@ int COutputWnd::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	std::ifstream s{ CHART_DATA_FILENAME, std::ios::binary };
 	if (s)
 		m_wndChart.Load(s, std::filesystem::file_size(CHART_DATA_FILENAME) / sizeof(double));
+	std::ifstream sc{ CHAMP_CHART_FILENAME, std::ios::binary };
+	if (sc)
+		m_wndChampChart.Load(sc, std::filesystem::file_size(CHAMP_CHART_FILENAME) / sizeof(double));
+	std::ifstream sa{ ANCHOR_CHART_FILENAME, std::ios::binary };
+	if (sa)
+		m_wndAnchorChart.Load(sa, std::filesystem::file_size(ANCHOR_CHART_FILENAME) / sizeof(double));
 	//m_wndChart.SetFocus();
 	return 0;
 }
@@ -174,6 +186,21 @@ void COutputWnd::AddDebugString(CString const& text)
 void COutputWnd::AddChartData(double db)
 {
 	m_wndChart.Add(db);
+}
+
+void COutputWnd::AddMatchData(double vsChampion, double vsRandom)
+{
+	if (!std::isnan(vsChampion))
+	{
+		m_wndChampChart.Add(vsChampion);
+		std::ofstream s{ CHAMP_CHART_FILENAME, std::ios::binary };
+		if (s)
+			m_wndChampChart.Save(s);
+	}
+	m_wndAnchorChart.Add(vsRandom);
+	std::ofstream s{ ANCHOR_CHART_FILENAME, std::ios::binary };
+	if (s)
+		m_wndAnchorChart.Save(s);
 }
 
 void COutputWnd::RemoveBuildString()

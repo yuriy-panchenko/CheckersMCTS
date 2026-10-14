@@ -1,0 +1,580 @@
+diff --git a/CLearningThread.cpp b/CLearningThread.cpp
+index 792dbdd..4fd77f4 100644
+--- a/CLearningThread.cpp
++++ b/CLearningThread.cpp
+@@ -19,6 +19,7 @@ using namespace mcts;
+ #define VALUE_MIX_START	(.3)
+ #define VALUE_MIX_GAMES	(1500.)
+ #define MATERIAL_SCALE	(4.)
++#define MATCH_EVERY	(100)	//	training games between background matches (see CMatchThread.cpp)
+ #define NNET_FILENAME	_T("net.bin")
+ #define STATS_FILENAME	_T("games.csv")
+ 
+@@ -60,12 +61,29 @@ BOOL CLearningThread::InitInstance()
+ 		::MessageBox(NULL, CA2W{ e.what() }, _T("Error loading nnet!"), MB_OK | MB_ICONERROR);
+ 	}
+ 
++	//	background matches: low priority, same notify window as ours
++	m_pMatchTh = static_cast<CMatchThread*>(::AfxBeginThread(RUNTIME_CLASS(CMatchThread), THREAD_PRIORITY_BELOW_NORMAL, 0, CREATE_SUSPENDED));
++	if (m_pMatchTh)
++	{
++		m_pMatchTh->SetNotifyWnd(m_hNotify.load());
++		m_pMatchTh->ResumeThread();
++	}
++
+ 	PostThreadMessage(WM_NEW_GAME, 0, 0);
+ 	return TRUE;
+ }
+ 
+ int CLearningThread::ExitInstance()
+ {
++	if (m_pMatchTh)
++	{
++		HANDLE const hTh{ *m_pMatchTh };		//	copied before WM_QUIT, the thread deletes itself
++		m_pMatchTh->SetNotifyWnd(nullptr);
++		m_pMatchTh->RequestStop();
++		m_pMatchTh->PostThreadMessage(WM_QUIT, 0, 0);
++		::WaitForSingleObject(hTh, INFINITE);
++		m_pMatchTh = nullptr;
++	}
+ 	return CWinThread::ExitInstance();
+ }
+ 
+@@ -227,6 +245,10 @@ void CLearningThread::EndGame(std::optional<Color> winner, GameStats::Reason why
+ 		::MessageBox(NULL, CA2W{ e.what() }, _T("Error saving nnet!"), MB_OK | MB_ICONERROR);
+ 	}
+ 
++	//	a frozen copy of the net goes to the match thread; if the previous match is still running this checkpoint is skipped
++	if (m_pMatchTh && m_Stats.games() % MATCH_EVERY == 0)
++		m_pMatchTh->Submit(std::make_unique<MatchJob>(m_Stats.games(), m_Net));
++
+ 	m_bOver = true;
+ 	m_Winner = winner;
+ 	{
+diff --git a/CLearningThread.h b/CLearningThread.h
+index b029606..78928bf 100644
+--- a/CLearningThread.h
++++ b/CLearningThread.h
+@@ -5,6 +5,7 @@
+ #include "mcts.h"
+ #include "GameStats.h"
+ #include "Checkers.h"
++#include "CMatchThread.h"
+ 
+ //	UI -> thread
+ constexpr UINT WM_NEXT_MOVE{ WM_APP + 0x0001 };		//	AI picks and plays the move for the side to move
+@@ -78,6 +79,7 @@ private:
+ 	size_t m_MaxRepeats{};
+ 	double m_QAbsMax{}, m_QLast{};   // largest |root value| in the game; root value at the final move
+ 	bool m_bOver{};
++	CMatchThread* m_pMatchTh{};	//	background matches; auto-deleting thread, we only wait on it
+ 	std::optional<game::Color> m_Winner;
+ 
+ 	//	shared with the UI
+diff --git a/CMatchThread.cpp b/CMatchThread.cpp
+new file mode 100644
+index 0000000..b9ce951
+--- /dev/null
++++ b/CMatchThread.cpp
+@@ -0,0 +1,192 @@
++// CMatchThread.cpp : implementation file
++//
++//	Background matches for the training run. Nothing here touches the learning thread's net: the job carries its own copy.
++
++#include "pch.h"
++#include "CMatchThread.h"
++
++using namespace game;
++using namespace mcts;
++
++#define MATCH_GAMES			(40)	//	games per opponent, colours alternate
++#define MATCH_PROMOTE		(.60)	//	score needed to become / replace the champion
++#define MATCH_RANDOM_PLIES	(4u)		//	opening plies played at random, otherwise two deterministic nets replay one game
++#define MATCH_MAX_PLIES		(400u)	//	safety net: a game that long is a draw
++#ifdef _DEBUG
++#define MATCH_SIMS			(50u)
++#else
++#define MATCH_SIMS			(200u)	//	simulations per move, deliberately lower than self-play
++#endif
++#define CHAMPION_FILENAME	_T("champion.bin")
++#define MATCHES_FILENAME	_T("matches.csv")
++
++IMPLEMENT_DYNCREATE(CMatchThread, CWinThread)
++
++CMatchThread::CMatchThread()
++{}
++
++CMatchThread::~CMatchThread()
++{}
++
++BOOL CMatchThread::InitInstance()
++{
++	std::ifstream s{ CHAMPION_FILENAME, std::ios::binary };
++	if (s)
++		try
++	{
++		auto n{ std::make_unique<NNet>() };
++		s >> *n;		//	adopts the shape stored in the file
++		m_pChampion = std::move(n);
++	}
++	catch (const std::exception&)
++	{
++		m_pChampion.reset();	//	unreadable (old format?): start without a champion
++	}
++	return TRUE;
++}
++
++int CMatchThread::ExitInstance()
++{
++	return CWinThread::ExitInstance();
++}
++
++BEGIN_MESSAGE_MAP(CMatchThread, CWinThread)
++	ON_THREAD_MESSAGE(WM_RUN_MATCH, &OnRunMatch)
++END_MESSAGE_MAP()
++
++bool CMatchThread::Submit(std::unique_ptr<MatchJob> job)
++{
++	if (m_bBusy.exchange(true))
++		return false;
++	if (!PostThreadMessage(WM_RUN_MATCH, 0, reinterpret_cast<LPARAM>(job.get())))
++	{
++		m_bBusy = false;
++		return false;
++	}
++	job.release();		//	the thread owns it now
++	return true;
++}
++
++void CMatchThread::OnRunMatch(WPARAM, LPARAM lp)
++{
++	std::unique_ptr<MatchJob> job{ reinterpret_cast<MatchJob*>(lp) };
++
++	auto res{ std::make_unique<MatchResult>() };
++	res->trainGames = job->trainGames;
++	res->hadChampion = (bool)m_pChampion;
++	res->championGame = m_uChampionGame;
++
++	if (m_pChampion)
++		res->vsChampion = PlayMatch(job->net, m_pChampion.get());
++	res->vsRandom = PlayMatch(job->net, nullptr);
++
++	if (m_bStop)		//	shutting down: the numbers are incomplete
++	{
++		m_bBusy = false;
++		return;
++	}
++
++	res->promoted = (res->hadChampion ? res->vsChampion : res->vsRandom).value() >= MATCH_PROMOTE;
++	if (res->promoted)
++	{
++		m_pChampion = std::make_unique<NNet>(job->net);
++		m_uChampionGame = job->trainGames;
++		SaveChampion();
++	}
++	AppendCsv(*res);
++
++	m_bBusy = false;
++	if (auto const h{ m_hNotify.load() })
++		if (::PostMessage(h, WM_MATCH_FINISHED, 0, reinterpret_cast<LPARAM>(res.get())))
++			(void)res.release();		//	the receiver deletes it
++}
++
++MatchScore CMatchThread::PlayMatch(NNet& a, NNet* b)
++{
++	MatchScore sc;
++	for (int g = 0; g < MATCH_GAMES && !m_bStop; ++g)
++	{
++		switch (PlayGame(a, b, g % 2 ? Color::Black : Color::White))
++		{
++		case  1: ++sc.w; break;
++		case  0: ++sc.d; break;
++		case -1: ++sc.l; break;
++		}
++	}
++	return sc;
++}
++
++int CMatchThread::PlayGame(NNet& a, NNet* b, Color aColor)
++{
++	//	one tree per side, both follow the real game; only the side to move searches. The b tree is just a game-state tracker when b is random.
++	struct Side { NNet* net; std::unique_ptr<MCTS> tree; };
++	auto const make{ [](NNet* n)
++		{
++			MCTS::callback cb{ [n](MCTS::vdb const& inp) -> MCTS::out_nnet { return n ? n->think(inp) : MCTS::out_nnet{}; } };
++			return std::make_unique<MCTS>(Checkers{ Color::Black }, std::move(cb));
++		} };
++	Side side[2]{ { &a, make(&a) }, { b, make(b) } };
++
++	for (auto& s : side)		//	same start as the learning thread: Black "to move", Do({}) hands the first move to White
++		s.tree->current_state().Do(Move{});
++
++	auto const result{ [&](std::optional<Color> winner) { return !winner ? 0 : *winner == aColor ? 1 : -1; } };
++
++	for (size_t ply = 0; !m_bStop; ++ply)
++	{
++		auto& tree{ *side[0].tree };
++		auto const& state{ tree.current_state() };
++		auto const moves{ state.GetAvailableMoves() };
++
++		//	the same end-of-game rules, in the same order, as CLearningThread::MakeMove
++		if (moves.empty())
++			return result(!state.WhoMakesTurn());
++		if (state.GetBoard().GetZipID().is_king_vs_king()
++			|| tree.root_repeats() >= MCTS::stale_limit
++			|| tree.root_quiet() >= MCTS::no_progress_limit
++			|| ply >= MATCH_MAX_PLIES)
++			return 0;
++
++		//	read the mover from the state every time: a partial capture chain leaves the same side to move
++		Side& s{ state.WhoMakesTurn() == aColor ? side[0] : side[1] };
++
++		Move m;
++		if (moves.size() == 1)			//	no choice, no search
++			m = moves.front();
++		else if (!s.net || ply < MATCH_RANDOM_PLIES)
++			m = moves[std::uniform_int_distribution<size_t>{ 0, moves.size() - 1 }(m_Rng)];
++		else
++		{
++			//	no root noise and most-visited move: a match measures strength, not exploration
++			for (size_t i = 0; i < MATCH_SIMS; ++i)
++				s.tree->run_simulation();
++			m = s.tree->select_move();
++		}
++
++		for (auto& t : side)
++			t.tree->advance_root(m);
++	}
++	return 0;		//	stopped
++}
++
++void CMatchThread::SaveChampion()const
++{
++	std::ofstream s{ CHAMPION_FILENAME, std::ios::binary };
++	if (s)
++		try { s << *m_pChampion; }
++	catch (const std::exception&) {}
++}
++
++void CMatchThread::AppendCsv(MatchResult const& r)const
++{
++	bool const fresh{ !std::filesystem::exists(MATCHES_FILENAME) };
++	std::ofstream s{ MATCHES_FILENAME, std::ios::app };
++	if (!s)
++		return;
++	if (fresh)
++		s << "train_game,champion_game,champ_w,champ_d,champ_l,rand_w,rand_d,rand_l,promoted\n";
++	s << r.trainGames << ',' << (r.hadChampion ? r.championGame : 0) << ','
++		<< r.vsChampion.w << ',' << r.vsChampion.d << ',' << r.vsChampion.l << ','
++		<< r.vsRandom.w << ',' << r.vsRandom.d << ',' << r.vsRandom.l << ','
++		<< (r.promoted ? 1 : 0) << '\n';
++}
+diff --git a/CMatchThread.h b/CMatchThread.h
+new file mode 100644
+index 0000000..efbf9a0
+--- /dev/null
++++ b/CMatchThread.h
+@@ -0,0 +1,78 @@
++#pragma once
++#include <atomic>
++#include <memory>
++#include <random>
++#include "defines.h"
++#include "mcts.h"
++
++//	learning thread -> match thread
++constexpr UINT WM_RUN_MATCH{ WM_APP + 0x0010 };			//	LPARAM = new MatchJob*, the thread deletes it
++//	match thread -> UI (posted to the notify window)
++constexpr UINT WM_MATCH_FINISHED{ WM_APP + 0x0011 };	//	LPARAM = new MatchResult*, the receiver deletes it
++
++//	a frozen copy of the net being tested; the match thread is its only user
++struct MatchJob
++{
++	MatchJob(size_t g, NNet const& n) :trainGames{ g }, net{ n } {}
++	size_t trainGames;		//	games.csv game count when the copy was taken
++	NNet net;
++};
++
++//	score of the challenger: wins + half the draws, over all games
++struct MatchScore
++{
++	int w{}, d{}, l{};
++	int games()const { return w + d + l; }
++	double value()const { return games() ? (w + .5 * d) / games() : .0; }
++};
++
++struct MatchResult
++{
++	size_t trainGames{};
++	bool hadChampion{};
++	size_t championGame{};		//	training game count at which the champion (the one the challenger faced) was promoted, 0 = loaded from disk
++	MatchScore vsChampion;		//	empty if there was no champion yet
++	MatchScore vsRandom;		//	the fixed anchor
++	bool promoted{};
++};
++
++// CMatchThread
++//
++//	Plays challenger-vs-champion and challenger-vs-random matches in the background so the training thread never waits.
++//	Champion rule: with no champion, a challenger that scores >= MATCH_PROMOTE against random becomes the champion;
++//	afterwards a challenger that scores >= MATCH_PROMOTE against the champion replaces it. The champion lives in champion.bin.
++
++class CMatchThread : public CWinThread
++{
++	DECLARE_DYNCREATE(CMatchThread)
++
++protected:
++	CMatchThread();
++	virtual ~CMatchThread();
++
++public:
++	virtual BOOL InitInstance();
++	virtual int ExitInstance();
++
++	void SetNotifyWnd(HWND h) { m_hNotify = h; }		//	set before ResumeThread(), or nullptr to stop notifications
++	void RequestStop() { m_bStop = true; }				//	any thread; the running match ends at its next ply
++	bool Submit(std::unique_ptr<MatchJob> job);			//	any thread; false (job untouched) if a match is still running or the queue is not ready
++
++protected:
++	afx_msg void OnRunMatch(WPARAM, LPARAM);
++	DECLARE_MESSAGE_MAP()
++
++private:
++	//	challenger `a` against `b` (nullptr = random mover); +1 a wins, 0 draw, -1 a loses
++	int PlayGame(NNet& a, NNet* b, game::Color aColor);
++	MatchScore PlayMatch(NNet& a, NNet* b);
++	void SaveChampion()const;
++	void AppendCsv(MatchResult const&)const;
++
++private:
++	std::unique_ptr<NNet> m_pChampion;
++	size_t m_uChampionGame{};
++	std::mt19937 m_Rng{ std::random_device{}() };
++	std::atomic<bool> m_bStop{ false }, m_bBusy{ false };
++	std::atomic<HWND> m_hNotify{ nullptr };
++};
+diff --git a/Checkers.vcxproj b/Checkers.vcxproj
+index 070ff4a..300f04c 100644
+--- a/Checkers.vcxproj
++++ b/Checkers.vcxproj
+@@ -204,6 +204,7 @@
+     <ClInclude Include="CheckersDoc.h" />
+     <ClInclude Include="CheckersView.h" />
+     <ClInclude Include="CLearningThread.h" />
++    <ClInclude Include="CMatchThread.h" />
+     <ClInclude Include="defines.h" />
+     <ClInclude Include="desc_tree.h" />
+     <ClInclude Include="framework.h" />
+@@ -222,6 +223,7 @@
+     <ClCompile Include="CheckersDoc.cpp" />
+     <ClCompile Include="CheckersView.cpp" />
+     <ClCompile Include="CLearningThread.cpp" />
++    <ClCompile Include="CMatchThread.cpp" />
+     <ClCompile Include="defines.cpp" />
+     <ClCompile Include="MainFrm.cpp" />
+     <ClCompile Include="mcts.cpp" />
+diff --git a/Checkers.vcxproj.filters b/Checkers.vcxproj.filters
+index 86327bb..d5b1b39 100644
+--- a/Checkers.vcxproj.filters
++++ b/Checkers.vcxproj.filters
+@@ -60,6 +60,9 @@
+     <ClInclude Include="CLearningThread.h">
+       <Filter>Header Files</Filter>
+     </ClInclude>
++    <ClInclude Include="CMatchThread.h">
++      <Filter>Header Files</Filter>
++    </ClInclude>
+     <ClInclude Include="GameStats.h">
+       <Filter>Header Files</Filter>
+     </ClInclude>
+@@ -98,6 +101,9 @@
+     <ClCompile Include="CLearningThread.cpp">
+       <Filter>Source Files</Filter>
+     </ClCompile>
++    <ClCompile Include="CMatchThread.cpp">
++      <Filter>Source Files</Filter>
++    </ClCompile>
+   </ItemGroup>
+   <ItemGroup>
+     <None Include="Checkers.reg" />
+diff --git a/CheckersDoc.cpp b/CheckersDoc.cpp
+index dd9c3c8..667c497 100644
+--- a/CheckersDoc.cpp
++++ b/CheckersDoc.cpp
+@@ -126,6 +126,19 @@ void CCheckersDoc::Kick()
+ 	m_bBusy = m_pLearnTh->PostThreadMessage(WM_NEXT_MOVE, 0, 0);
+ }
+ 
++void CCheckersDoc::OnMatchFinished(MatchResult const& r)
++{
++	auto& out{ static_cast<CMainFrame*>(theApp.GetMainWnd())->GetOutputWnd() };
++
++	CString str, champ;
++	if (r.hadChampion)
++		champ.Format(_T("vs champion (since game %zu) +%d =%d -%d: %.3f | "), r.championGame, r.vsChampion.w, r.vsChampion.d, r.vsChampion.l, r.vsChampion.value());
++	str.Format(_T("MATCH @%zu: %svs random +%d =%d -%d: %.3f%s"), r.trainGames, (LPCTSTR)champ,
++		r.vsRandom.w, r.vsRandom.d, r.vsRandom.l, r.vsRandom.value(), r.promoted ? _T(" | NEW CHAMPION") : _T(""));
++	out.AddDebugString(str);
++	out.AddMatchData(r.hadChampion ? r.vsChampion.value() : std::numeric_limits<double>::quiet_NaN(), r.vsRandom.value());
++}
++
+ void CCheckersDoc::OnMoveFinished()
+ {
+ 	if (!m_pLearnTh)
+diff --git a/CheckersDoc.h b/CheckersDoc.h
+index a499959..58a5c1c 100644
+--- a/CheckersDoc.h
++++ b/CheckersDoc.h
+@@ -23,6 +23,7 @@ public:
+ 	game::Move FindMove(game::Position from, game::Position to)const;
+ 	void HumanMove(game::Move const&);		//	view -> thread
+ 	void OnMoveFinished();					//	thread -> UI, called from the view on WM_MOVE_FINISHED
++	void OnMatchFinished(MatchResult const&);	//	match thread -> UI, called from the view on WM_MATCH_FINISHED
+ 	// Operations
+ public:
+ 
+diff --git a/CheckersView.cpp b/CheckersView.cpp
+index ac7c349..1add2d7 100644
+--- a/CheckersView.cpp
++++ b/CheckersView.cpp
+@@ -45,6 +45,7 @@ BEGIN_MESSAGE_MAP(CCheckersView, CView)
+ 	ON_WM_SIZE()
+ 	ON_WM_LBUTTONDOWN()
+ 	ON_MESSAGE(WM_MOVE_FINISHED, &OnMoveFinished)
++	ON_MESSAGE(WM_MATCH_FINISHED, &OnMatchFinished)
+ END_MESSAGE_MAP()
+ 
+ // CCheckersView construction/destruction
+@@ -374,6 +375,13 @@ LRESULT CCheckersView::OnMoveFinished(WPARAM, LPARAM)
+ 	return 0;
+ }
+ 
++LRESULT CCheckersView::OnMatchFinished(WPARAM, LPARAM lp)
++{
++	std::unique_ptr<MatchResult> r{ reinterpret_cast<MatchResult*>(lp) };
++	GetDocument()->OnMatchFinished(*r);
++	return 0;
++}
++
+ void CCheckersView::OnInitialUpdate()
+ {
+ 	CView::OnInitialUpdate();
+diff --git a/CheckersView.h b/CheckersView.h
+index 799417b..8e467a6 100644
+--- a/CheckersView.h
++++ b/CheckersView.h
+@@ -44,6 +44,7 @@ protected:
+ 	afx_msg void OnSize(UINT nType, int cx, int cy);
+ 	afx_msg void OnLButtonDown(UINT nFlags, CPoint point);
+ 	afx_msg LRESULT OnMoveFinished(WPARAM, LPARAM);
++	afx_msg LRESULT OnMatchFinished(WPARAM, LPARAM);
+ 	DECLARE_MESSAGE_MAP()
+ 
+ private:
+diff --git a/OutputWnd.cpp b/OutputWnd.cpp
+index c03b078..fc79e64 100644
+--- a/OutputWnd.cpp
++++ b/OutputWnd.cpp
+@@ -13,6 +13,8 @@ static char THIS_FILE[] = __FILE__;
+ #endif
+ 
+ #define CHART_DATA_FILENAME	_T("chart.bin")
++#define CHAMP_CHART_FILENAME	_T("champion_chart.bin")
++#define ANCHOR_CHART_FILENAME	_T("anchor_chart.bin")
+ 
+ /////////////////////////////////////////////////////////////////////////////
+ // COutputBar
+@@ -49,6 +51,8 @@ int COutputWnd::OnCreate(LPCREATESTRUCT lpCreateStruct)
+ 	if (!m_wndOutputBuild.Create(dwStyle, rectDummy, &m_wndTabs, ID_OUTPUT_BUILD)
+ 		|| !m_wndOutputDebug.Create(dwStyle, rectDummy, &m_wndTabs, ID_OUTPUT_DEBUG)
+ 		|| !m_wndChart.Create(NULL, NULL, WS_CHILD | WS_VISIBLE, CRect{}, &m_wndTabs, ID_CHART_WND)
++		|| !m_wndChampChart.Create(NULL, NULL, WS_CHILD | WS_VISIBLE, CRect{}, &m_wndTabs, ID_CHAMP_CHART_WND)
++		|| !m_wndAnchorChart.Create(NULL, NULL, WS_CHILD | WS_VISIBLE, CRect{}, &m_wndTabs, ID_ANCHOR_CHART_WND)
+ 		/*
+ 		||!m_wndOutputFind.Create(dwStyle, rectDummy, &m_wndTabs, 4)*/)
+ 	{
+@@ -82,6 +86,8 @@ int COutputWnd::OnCreate(LPCREATESTRUCT lpCreateStruct)
+ 	m_wndTabs.AddTab(&m_wndOutputDebug, strTabName, (UINT)1);
+ 
+ 	m_wndTabs.AddTab(&m_wndChart, _T("Chart"), 2u);
++	m_wndTabs.AddTab(&m_wndChampChart, _T("Vs champion"), 3u);
++	m_wndTabs.AddTab(&m_wndAnchorChart, _T("Vs random"), 4u);
+ 	/*
+ 	bNameValid = strTabName.LoadString(IDS_FIND_TAB);
+ 	ASSERT(bNameValid);
+@@ -94,6 +100,12 @@ int COutputWnd::OnCreate(LPCREATESTRUCT lpCreateStruct)
+ 	std::ifstream s{ CHART_DATA_FILENAME, std::ios::binary };
+ 	if (s)
+ 		m_wndChart.Load(s, std::filesystem::file_size(CHART_DATA_FILENAME) / sizeof(double));
++	std::ifstream sc{ CHAMP_CHART_FILENAME, std::ios::binary };
++	if (sc)
++		m_wndChampChart.Load(sc, std::filesystem::file_size(CHAMP_CHART_FILENAME) / sizeof(double));
++	std::ifstream sa{ ANCHOR_CHART_FILENAME, std::ios::binary };
++	if (sa)
++		m_wndAnchorChart.Load(sa, std::filesystem::file_size(ANCHOR_CHART_FILENAME) / sizeof(double));
+ 	//m_wndChart.SetFocus();
+ 	return 0;
+ }
+@@ -176,6 +188,21 @@ void COutputWnd::AddChartData(double db)
+ 	m_wndChart.Add(db);
+ }
+ 
++void COutputWnd::AddMatchData(double vsChampion, double vsRandom)
++{
++	if (!std::isnan(vsChampion))
++	{
++		m_wndChampChart.Add(vsChampion);
++		std::ofstream s{ CHAMP_CHART_FILENAME, std::ios::binary };
++		if (s)
++			m_wndChampChart.Save(s);
++	}
++	m_wndAnchorChart.Add(vsRandom);
++	std::ofstream s{ ANCHOR_CHART_FILENAME, std::ios::binary };
++	if (s)
++		m_wndAnchorChart.Save(s);
++}
++
+ void COutputWnd::RemoveBuildString()
+ {
+ 	int index = m_wndOutputBuild.GetCount();
+diff --git a/OutputWnd.h b/OutputWnd.h
+index 008282d..9555529 100644
+--- a/OutputWnd.h
++++ b/OutputWnd.h
+@@ -37,6 +37,7 @@ public:
+ 	void RemoveBuildString();
+ 	void ClearBuild();
+ 	void SaveChartData();
++	void AddMatchData(double vsChampion, double vsRandom);	//	NaN = no champion yet, nothing added to that chart
+ 	void SetSummary(CString const&);
+ 
+ 	// Attributes
+@@ -47,6 +48,7 @@ protected:
+ 	COutputList m_wndOutputBuild;
+ 	COutputList m_wndOutputDebug;
+ 	CChatWnd m_wndChart;
++	CChatWnd m_wndChampChart, m_wndAnchorChart;	//	challenger score vs champion / vs random, one point per match
+ 	//COutputList m_wndOutputFind;
+ 
+ protected:
+diff --git a/Resource.h b/Resource.h
+index 2869934..35ddaf9 100644
+--- a/Resource.h
++++ b/Resource.h
+@@ -48,6 +48,8 @@
+ #define ID_OUTPUT_TABS                  311
+ #define ID_OUTPUT_BUILD                 312
+ #define ID_OUTPUT_DEBUG                 313
++#define ID_CHAMP_CHART_WND              314
++#define ID_ANCHOR_CHART_WND             315
+ #define ID_START_PAUSE                  32772
+ #define ID_WHITE_HUMAN                  32775
+ #define ID_START_LEARNING_THREAD        32776
+@@ -60,6 +62,6 @@
+ #define _APS_NEXT_RESOURCE_VALUE        310
+ #define _APS_NEXT_COMMAND_VALUE         32778
+ #define _APS_NEXT_CONTROL_VALUE         1000
+-#define _APS_NEXT_SYMED_VALUE           314
++#define _APS_NEXT_SYMED_VALUE           316
+ #endif
+ #endif

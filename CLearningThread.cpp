@@ -19,13 +19,14 @@ using namespace mcts;
 #define VALUE_MIX_START	(.3)
 #define VALUE_MIX_GAMES	(1500.)
 #define MATERIAL_SCALE	(4.)
+#define MATCH_EVERY	(100)	//	training games between background matches (see CMatchThread.cpp)
 #define NNET_FILENAME	_T("net.bin")
 #define STATS_FILENAME	_T("games.csv")
 
 static const NNet::topology g_Topology
 {
 	{180, 180, 180, 180, 128},	//	body
-	{160, 200},					//	policy
+	{160, 256},					//	policy
 	{64, 32},					//	value
 };
 
@@ -60,12 +61,29 @@ BOOL CLearningThread::InitInstance()
 		::MessageBox(NULL, CA2W{ e.what() }, _T("Error loading nnet!"), MB_OK | MB_ICONERROR);
 	}
 
+	//	background matches: low priority, same notify window as ours
+	m_pMatchTh = static_cast<CMatchThread*>(::AfxBeginThread(RUNTIME_CLASS(CMatchThread), THREAD_PRIORITY_BELOW_NORMAL, 0, CREATE_SUSPENDED));
+	if (m_pMatchTh)
+	{
+		m_pMatchTh->SetNotifyWnd(m_hNotify.load());
+		m_pMatchTh->ResumeThread();
+	}
+
 	PostThreadMessage(WM_NEW_GAME, 0, 0);
 	return TRUE;
 }
 
 int CLearningThread::ExitInstance()
 {
+	if (m_pMatchTh)
+	{
+		HANDLE const hTh{ *m_pMatchTh };		//	copied before WM_QUIT, the thread deletes itself
+		m_pMatchTh->SetNotifyWnd(nullptr);
+		m_pMatchTh->RequestStop();
+		m_pMatchTh->PostThreadMessage(WM_QUIT, 0, 0);
+		::WaitForSingleObject(hTh, INFINITE);
+		m_pMatchTh = nullptr;
+	}
 	return CWinThread::ExitInstance();
 }
 
@@ -226,6 +244,10 @@ void CLearningThread::EndGame(std::optional<Color> winner, GameStats::Reason why
 	{
 		::MessageBox(NULL, CA2W{ e.what() }, _T("Error saving nnet!"), MB_OK | MB_ICONERROR);
 	}
+
+	//	a frozen copy of the net goes to the match thread; if the previous match is still running this checkpoint is skipped
+	if (m_pMatchTh && m_Stats.games() % MATCH_EVERY == 0)
+		m_pMatchTh->Submit(std::make_unique<MatchJob>(m_Stats.games(), m_Net));
 
 	m_bOver = true;
 	m_Winner = winner;

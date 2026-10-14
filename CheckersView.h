@@ -44,6 +44,7 @@ protected:
 	afx_msg void OnSize(UINT nType, int cx, int cy);
 	afx_msg void OnLButtonDown(UINT nFlags, CPoint point);
 	afx_msg LRESULT OnMoveFinished(WPARAM, LPARAM);
+	afx_msg LRESULT OnMatchFinished(WPARAM, LPARAM);
 	DECLARE_MESSAGE_MAP()
 
 private:

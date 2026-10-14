@@ -60,6 +60,9 @@
     <ClInclude Include="CLearningThread.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="CMatchThread.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="GameStats.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -96,6 +99,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="CLearningThread.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="CMatchThread.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
