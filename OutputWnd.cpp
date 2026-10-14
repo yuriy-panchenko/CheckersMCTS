@@ -85,6 +85,19 @@ int COutputWnd::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	ASSERT(bNameValid);
 	m_wndTabs.AddTab(&m_wndOutputDebug, strTabName, (UINT)1);
 
+	m_wndChart.SetInfo(_T("Policy loss, mean per game"),
+		_T("Lower = the net's move choice agrees more with what the search found. It can fall without the net getting stronger, so check the match tabs. Flat for hundreds of games = learning rate too low, or training has stalled."));
+
+	m_wndChampChart.SetMaWindow(4);
+	m_wndChampChart.SetFixedRange(0., 1.);
+	m_wndChampChart.SetInfo(_T("Challenger vs champion, one point per match"),
+		_T("Score = wins + half the draws, 40 games, so one point is only good to about +-0.08. 0.50 = equal strength. 0.60 or more = the challenger becomes the new champion. Good: now and then a point at 0.60+. Bad: a long flat stretch at or below 0.5. Empty until a first champion exists."));
+
+	m_wndAnchorChart.SetMaWindow(4);
+	m_wndAnchorChart.SetFixedRange(0., 1.);
+	m_wndAnchorChart.SetInfo(_T("Challenger vs random mover, one point per match"),
+		_T("A fixed yardstick that never gets stronger. It should sit near the top; the first point at 0.60 or more makes the first champion. A dip means the net got worse at the basics, even if the champion chart looks fine."));
+
 	m_wndTabs.AddTab(&m_wndChart, _T("Chart"), 2u);
 	m_wndTabs.AddTab(&m_wndChampChart, _T("Vs champion"), 3u);
 	m_wndTabs.AddTab(&m_wndAnchorChart, _T("Vs random"), 4u);
