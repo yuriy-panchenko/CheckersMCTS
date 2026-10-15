@@ -14,7 +14,7 @@ using namespace mcts;
 #else
 #define SIMULATION_COUNT	(1'000)
 #endif
-#define LEARNING_RATE	(.0007)
+#define LEARNING_RATE	(.05)
 // value target = lambda*outcome + (1-lambda)*tanh(material/MATERIAL_SCALE); lambda ramps up so material fades out
 #define VALUE_MIX_START	(.3)
 #define VALUE_MIX_GAMES	(1500.)
