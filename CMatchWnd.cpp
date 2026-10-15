@@ -127,14 +127,14 @@ void CMatchWnd::OnPaint()
 	y += 30;
 	dc.TextOut(x, y, _T("vsChamp"));
 	x += tab_width;
-	s.Format(_T("%d, %d / %d / %d, %.1f%%"), m_Result.vsChampion.games(), m_Result.vsChampion.w, m_Result.vsChampion.d, m_Result.vsChampion.l, m_Result.vsChampion.value() * 100.);
+	s.Format(_T("%d, %d - %d - %d, %.1f%%"), m_Result.vsChampion.games(), m_Result.vsChampion.w, m_Result.vsChampion.d, m_Result.vsChampion.l, m_Result.vsChampion.value() * 100.);
 	dc.TextOut(x, y, s);
 
 	x = iLeft;
 	y += 30;
 	dc.TextOut(x, y, _T("vsRand"));
 	x += tab_width;
-	s.Format(_T("%d, %d / %d / %d, %.1f%%"), m_Result.vsRandom.games(), m_Result.vsRandom.w, m_Result.vsRandom.d, m_Result.vsRandom.l, m_Result.vsRandom.value() * 100.);
+	s.Format(_T("%d, %d - %d - %d, %.1f%%"), m_Result.vsRandom.games(), m_Result.vsRandom.w, m_Result.vsRandom.d, m_Result.vsRandom.l, m_Result.vsRandom.value() * 100.);
 	dc.TextOut(x, y, s);
 
 	if (m_bCompleted)

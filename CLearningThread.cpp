@@ -25,9 +25,9 @@ using namespace mcts;
 
 static const NNet::topology g_Topology
 {
-	{180, 180, 180, 180, 128},	//	body
-	{160, 256},					//	policy
-	{64, 32},					//	value
+	{180, 180, 180, 128},	//	body
+	{256},						//	policy
+	{64},						//	value
 };
 
 // CLearningThread

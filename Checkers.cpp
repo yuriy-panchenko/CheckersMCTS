@@ -104,6 +104,14 @@ BOOL CCheckersApp::InitInstance()
 	InitKeyboardManager();
 
 	InitTooltipManager();
+
+	auto wd{ std::filesystem::current_path() };
+	wd /= "data";
+	std::error_code ec;
+	std::filesystem::create_directory(wd, ec);
+	if (!ec)
+		std::filesystem::current_path(wd);
+
 	CMFCToolTipInfo ttParams;
 	ttParams.m_bVislManagerTheme = TRUE;
 	theApp.GetTooltipManager()->SetTooltipParams(AFX_TOOLTIP_TYPE_ALL,
