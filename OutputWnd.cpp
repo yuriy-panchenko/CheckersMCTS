@@ -128,6 +128,11 @@ void COutputWnd::ResetMatchWnd(size_t id)
 	m_wndMatch.Reset(id);
 }
 
+void COutputWnd::SetMatchLive(MatchLive const& live)
+{
+	m_wndMatch.SetLive(live);
+}
+
 void COutputWnd::OnSize(UINT nType, int cx, int cy)
 {
 	// OnSize: replace the body

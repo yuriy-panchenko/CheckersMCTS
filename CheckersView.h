@@ -47,6 +47,7 @@ protected:
 	afx_msg LRESULT OnMatchFinished(WPARAM, LPARAM);
 	afx_msg LRESULT OnMatchScore(WPARAM, LPARAM);
 	afx_msg LRESULT OnMatchStarted(WPARAM, LPARAM);
+	afx_msg LRESULT OnMatchLive(WPARAM, LPARAM);
 	DECLARE_MESSAGE_MAP()
 
 private:

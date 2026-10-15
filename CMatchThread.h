@@ -2,6 +2,7 @@
 #include <atomic>
 #include <memory>
 #include <random>
+#include <vector>
 #include "defines.h"
 #include "mcts.h"
 
@@ -21,6 +22,7 @@ constexpr UINT WM_RUN_MATCH{ WM_APP + 0x0010 };			//	LPARAM = new MatchJob*, the
 constexpr UINT WM_MATCH_FINISHED{ WM_APP + 0x0011 };	//	LPARAM = new MatchResult*, the receiver deletes it
 constexpr UINT WM_MATCH_SCORE{ WM_APP + 0x0012 };	//	LPARAM = new MatchScore*, the receiver deletes it
 constexpr UINT WM_MATCH_STARTED{ WM_APP + 0x0013 };	//	LPARAM = game bunch (id)
+constexpr UINT WM_MATCH_LIVE{ WM_APP + 0x0014 };		//	LPARAM = new MatchLive*, the receiver deletes it; snapshot of the running match (board, ply, per-game results, timing)
 
 //	a frozen copy of the net being tested; the match thread is its only user
 struct MatchJob
@@ -36,6 +38,25 @@ struct MatchScore
 	int w{}, d{}, l{};
 	int games()const { return w + d + l; }
 	double value()const { return games() ? (w + .5 * d) / games() : .0; }
+};
+
+enum class MatchPhase { Idle, VsChampion, VsRandom };
+
+//	snapshot of the match in progress: posted after every game and, at most every 100 ms, while a game is being played
+struct MatchLive
+{
+	MatchPhase phase{};
+	bool hadChampion{};
+	size_t championGame{};			//	0 = loaded from disk
+	int game{};						//	0-based index of the game in progress in this phase; MATCH_GAMES when the phase is complete
+	bool challengerWhite{};
+	bool challengerToMove{};
+	size_t ply{};					//	plies played in the current game
+	std::vector<signed char> champGames, randGames;	//	+1 win, 0 draw, -1 loss: one per finished game
+	size_t finishedPlies{};			//	plies of all finished games of this match
+	ULONGLONG elapsedMs{};			//	since the match started
+	id::zip64 board;				//	position being played
+	CString lastMove;
 };
 
 struct MatchResult
@@ -80,6 +101,7 @@ private:
 	MatchScore PlayMatch(NNet& a, NNet* b);
 	void SaveChampion()const;
 	void AppendCsv(MatchResult const&)const;
+	void PostLive(bool force);			//	throttled unless forced
 
 private:
 	std::unique_ptr<NNet> m_pChampion;
@@ -87,4 +109,7 @@ private:
 	std::mt19937 m_Rng{ std::random_device{}() };
 	std::atomic<bool> m_bStop{ false }, m_bBusy{ false };
 	std::atomic<HWND> m_hNotify{ NULL };
+
+	MatchLive m_Live;					//	match-thread only; copies go to the UI
+	ULONGLONG m_tStart{}, m_tLastPost{};
 };

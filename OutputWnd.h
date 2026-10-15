@@ -42,6 +42,7 @@ public:
 	void SetSummary(CString const&);
 	void SetMatchScore(BOOL vsNet, MatchScore const&);
 	void ResetMatchWnd(size_t);
+	void SetMatchLive(MatchLive const&);
 
 	// Attributes
 protected:

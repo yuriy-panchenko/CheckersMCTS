@@ -69,8 +69,18 @@ void CMatchThread::OnRunMatch(WPARAM, LPARAM lp)
 	res->hadChampion = (bool)m_pChampion;
 	res->championGame = m_uChampionGame;
 
+	m_Live = MatchLive{};
+	m_Live.hadChampion = res->hadChampion;
+	m_Live.championGame = m_uChampionGame;
+	m_tStart = ::GetTickCount64();
+	m_tLastPost = 0;
+
 	if (m_pChampion)
+	{
+		m_Live.phase = MatchPhase::VsChampion;
 		res->vsChampion = PlayMatch(job->net, m_pChampion.get());
+	}
+	m_Live.phase = MatchPhase::VsRandom;
 	res->vsRandom = PlayMatch(job->net, nullptr);
 
 	if (m_bStop)		//	shutting down: the numbers are incomplete
@@ -97,21 +107,50 @@ void CMatchThread::OnRunMatch(WPARAM, LPARAM lp)
 MatchScore CMatchThread::PlayMatch(NNet& a, NNet* b)
 {
 	MatchScore sc;
+	auto& history{ m_Live.phase == MatchPhase::VsChampion ? m_Live.champGames : m_Live.randGames };
 	for (int g = 0; g < MATCH_GAMES && !m_bStop; ++g)
 	{
-		switch (PlayGame(a, b, g % 2 ? Color::Black : Color::White))
+		Color const aColor{ g % 2 ? Color::Black : Color::White };
+		m_Live.game = g;
+		m_Live.challengerWhite = aColor == Color::White;
+		m_Live.ply = 0;
+		PostLive(true);
+
+		int const r{ PlayGame(a, b, aColor) };
+		switch (r)
 		{
 		case  1: ++sc.w; break;
 		case  0: ++sc.d; break;
 		case -1: ++sc.l; break;
 		}
+		history.push_back(static_cast<signed char>(r));
+		m_Live.finishedPlies += m_Live.ply;
+		m_Live.game = g + 1;
 
 		auto ptr{ std::make_unique<MatchScore>(sc) };
 		if (auto const h{ m_hNotify.load() })
 			if (::PostMessage(h, WM_MATCH_SCORE, reinterpret_cast<WPARAM>(b), reinterpret_cast<LPARAM>(ptr.get())))
 				ptr.release();
+		PostLive(true);
 	}
 	return sc;
+}
+
+void CMatchThread::PostLive(bool force)
+{
+	constexpr ULONGLONG min_interval_ms{ 100 };
+	ULONGLONG const now{ ::GetTickCount64() };
+	if (!force && now - m_tLastPost < min_interval_ms)
+		return;
+	m_tLastPost = now;
+	m_Live.elapsedMs = now - m_tStart;
+
+	if (auto const h{ m_hNotify.load() })
+	{
+		auto ptr{ std::make_unique<MatchLive>(m_Live) };
+		if (::PostMessage(h, WM_MATCH_LIVE, 0, reinterpret_cast<LPARAM>(ptr.get())))
+			(void)ptr.release();		//	the receiver deletes it
+	}
 }
 
 int CMatchThread::PlayGame(NNet& a, NNet* b, Color aColor)
@@ -139,6 +178,12 @@ int CMatchThread::PlayGame(NNet& a, NNet* b, Color aColor)
 		auto const& state{ tree.current_state() };
 		auto const moves{ state.GetAvailableMoves() };
 
+		//	what the Match window shows
+		m_Live.ply = ply;
+		m_Live.board = state.GetBoard().GetZipID();
+		m_Live.challengerToMove = state.WhoMakesTurn() == aColor;
+		PostLive(false);
+
 		//	the same end-of-game rules, in the same order, as CLearningThread::MakeMove
 		if (moves.empty())
 			return result(!state.WhoMakesTurn());
@@ -164,6 +209,7 @@ int CMatchThread::PlayGame(NNet& a, NNet* b, Color aColor)
 			m = s.tree->select_move();
 		}
 
+		m_Live.lastMove = game::ToString(m);
 		for (auto& t : side)
 			t.tree->advance_root(m);
 	}

@@ -49,6 +49,7 @@ BEGIN_MESSAGE_MAP(CCheckersView, CView)
 	ON_MESSAGE(WM_MATCH_FINISHED, &OnMatchFinished)
 	ON_MESSAGE(WM_MATCH_SCORE, &OnMatchScore)
 	ON_MESSAGE(WM_MATCH_STARTED, &OnMatchStarted)
+	ON_MESSAGE(WM_MATCH_LIVE, &OnMatchLive)
 END_MESSAGE_MAP()
 
 // CCheckersView construction/destruction
@@ -395,6 +396,13 @@ LRESULT CCheckersView::OnMatchScore(WPARAM wParam, LPARAM lParam)
 LRESULT CCheckersView::OnMatchStarted(WPARAM, LPARAM lParam)
 {
 	static_cast<CMainFrame*>(theApp.GetMainWnd())->GetOutputWnd().ResetMatchWnd(lParam);
+	return 0;
+}
+
+LRESULT CCheckersView::OnMatchLive(WPARAM, LPARAM lParam)
+{
+	std::unique_ptr<MatchLive> live{ reinterpret_cast<MatchLive*>(lParam) };
+	static_cast<CMainFrame*>(theApp.GetMainWnd())->GetOutputWnd().SetMatchLive(*live);
 	return 0;
 }
 
