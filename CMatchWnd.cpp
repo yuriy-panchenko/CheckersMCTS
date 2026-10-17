@@ -261,7 +261,7 @@ void CMatchWnd::Draw(CDC& dc, CRect const& rc)
 	if (ch < 60)
 		return;
 
-	int const side{ max(80, min(280, ((ch - 84) / 8) * 8)) };
+	int const side{ max(80, min(280, ((ch - 106) / 8) * 8)) };
 	int const boardW{ side + 24 };
 	int const boardX{ max(M, rc.right - M - boardW) };
 	int avail{ boardX - G - M };
@@ -476,23 +476,46 @@ void CMatchWnd::Draw(CDC& dc, CRect const& rc)
 			}
 		outline(CRect{ bx - 1, by - 1, bx + 8 * cell + 1, by + 8 * cell + 1 }, kEdge, 1);
 
-		int const cy{ by + 8 * cell + 8 };
-		CString who, last;
-		COLORREF wc{ kMuted };
-		if (running && L.phase != MatchPhase::Idle)
+		//	Who moves: two fixed rows (name left, colour right) and a marker on the side of the row whose turn it is.
+		//	The text never changes within a game, so fast games stay readable; only the marker and the row highlight jump.
+		int cy{ by + 8 * cell + 8 };
+		if ((running && L.phase != MatchPhase::Idle) || m_bCompleted)
 		{
-			bool const moverWhite{ L.challengerToMove ? L.challengerWhite : !L.challengerWhite };
-			who.Format(_T("%s (%s) to move"),
-				L.challengerToMove ? _T("Challenger") : L.phase == MatchPhase::VsChampion ? _T("Champion") : _T("Random"),
-				moverWhite ? _T("White") : _T("Black"));
-			wc = L.challengerToMove ? kAccent : kText;
+			bool const live{ running && L.phase != MatchPhase::Idle };
+			bool const vsChampion{ L.phase == MatchPhase::VsChampion };
+			for (int k = 0; k < 2; ++k)
+			{
+				bool const challenger{ k == 0 };
+				bool const white{ challenger ? L.challengerWhite : !L.challengerWhite };
+				bool const toMove{ live && challenger == L.challengerToMove };
+				CString const name{ challenger ? _T("Challenger") : vsChampion ? _T("Champion") : _T("Random") };
+				CRect const row{ rBoard.left + 8, cy, rBoard.right - 8, cy + 18 };
+
+				if (toMove)
+				{
+					fill(row, kEdge, 5);
+					int const mid{ row.top + 9 };
+					CPoint tri[3]{ { row.left + 5, mid - 5 }, { row.left + 5, mid + 5 }, { row.left + 12, mid } };
+					CBrush br{ kAccent };
+					auto* const ob{ dc.SelectObject(&br) };
+					auto* const op{ dc.SelectObject(CPen::FromHandle(static_cast<HPEN>(::GetStockObject(NULL_PEN)))) };
+					dc.Polygon(tri, 3);
+					dc.SelectObject(ob);
+					dc.SelectObject(op);
+				}
+				disc(CRect{ row.left + 18, row.top + 3, row.left + 30, row.top + 15 },
+					white ? RGB(246, 244, 238) : RGB(36, 36, 42), white ? RGB(92, 80, 68) : RGB(200, 200, 210), 1);
+				text(m_fSmall, toMove ? kText : kMuted, name, row.left + 38, row.top + 1);
+				text(m_fSmall, toMove ? kText : kMuted, white ? _T("White") : _T("Black"), row.right - 8, row.top + 1, TA_RIGHT);
+				cy += 20;
+			}
 		}
-		else if (m_bCompleted)
-			who = _T("final position of the last game");
 		if (!L.lastMove.IsEmpty())
+		{
+			CString last;
 			last.Format(_T("last move: %s"), (LPCTSTR)L.lastMove);
-		text(m_fSmall, wc, who, rBoard.left + 12, cy);
-		text(m_fSmall, kMuted, last, rBoard.left + 12, cy + 16);
+			text(m_fSmall, kMuted, last, rBoard.left + 12, cy + 2);
+		}
 
 		dc.RestoreDC(save);
 	}
