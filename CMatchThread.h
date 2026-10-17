@@ -6,7 +6,10 @@
 #include "defines.h"
 #include "mcts.h"
 
-#define MATCH_GAMES			(50)	//	games per opponent, colours alternate
+#define MATCH_CHAMP_GAMES	(70)	//	games against the champion, colours alternate
+#define MATCH_RANDOM_GAMES	(10)	//	games against a random mover: a sanity check (real nets win them all), so few
+									//	a match has to finish before the next training batch (MATCH_EVERY games): a vs-random game costs about half a vs-champion one,
+									//	because only the challenger searches
 #define MATCH_PROMOTE		(.60)	//	score needed to become / replace the champion
 #define MATCH_RANDOM_PLIES	(4u)		//	opening plies played at random, otherwise two deterministic nets replay one game
 #define MATCH_MAX_PLIES		(400u)	//	safety net: a game that long is a draw
@@ -42,13 +45,15 @@ struct MatchScore
 
 enum class MatchPhase { Idle, VsChampion, VsRandom };
 
+constexpr int MatchGames(bool vsChampion) { return vsChampion ? MATCH_CHAMP_GAMES : MATCH_RANDOM_GAMES; }
+
 //	snapshot of the match in progress: posted after every game and, at most every 100 ms, while a game is being played
 struct MatchLive
 {
 	MatchPhase phase{};
 	bool hadChampion{};
 	size_t championGame{};			//	0 = loaded from disk
-	int game{};						//	0-based index of the game in progress in this phase; MATCH_GAMES when the phase is complete
+	int game{};						//	0-based index of the game in progress in this phase; the phase's game count when the phase is complete
 	bool challengerWhite{};
 	bool challengerToMove{};
 	size_t ply{};					//	plies played in the current game
@@ -73,7 +78,8 @@ struct MatchResult
 //
 //	Plays challenger-vs-champion and challenger-vs-random matches in the background so the training thread never waits.
 //	Champion rule: with no champion, a challenger that scores >= MATCH_PROMOTE against random becomes the champion;
-//	afterwards a challenger that scores >= MATCH_PROMOTE against the champion replaces it. The champion lives in champion.bin.
+//	afterwards a challenger that scores >= MATCH_PROMOTE against the champion replaces it.
+//	Every champion is kept as champion_<training game>.bin; the highest number is the current one (an old unnumbered champion.bin loads as game 0).
 
 class CMatchThread : public CWinThread
 {

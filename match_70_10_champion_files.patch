@@ -1,0 +1,292 @@
+diff --git a/CMatchThread.cpp b/CMatchThread.cpp
+index 669749a..c094abe 100644
+--- a/CMatchThread.cpp
++++ b/CMatchThread.cpp
+@@ -8,9 +8,48 @@
+ using namespace game;
+ using namespace mcts;
+ 
+-#define CHAMPION_FILENAME	_T("champion.bin")
++#define CHAMPION_LEGACY_FILENAME	_T("champion.bin")	//	before the game number moved into the file name
++#define CHAMPION_PREFIX				L"champion_"			//	champion_<training game>.bin
++#define CHAMPION_EXT				L".bin"
+ #define MATCHES_FILENAME	_T("matches.csv")
+ 
++namespace
++{
++	std::filesystem::path ChampionPath(size_t game)
++	{
++		return std::filesystem::path{ std::wstring{ CHAMPION_PREFIX } + std::to_wstring(game) + CHAMPION_EXT };
++	}
++
++	//	the champion_<game>.bin with the highest game number in the working directory; empty path if there is none
++	std::filesystem::path FindChampion(size_t& game)
++	{
++		namespace fs = std::filesystem;
++		std::wstring const prefix{ CHAMPION_PREFIX };
++		fs::path best;
++		game = 0;
++		std::error_code ec;
++		for (fs::directory_iterator it{ fs::path{ L"." }, ec }, end; !ec && it != end; it.increment(ec))
++		{
++			fs::path const& p{ it->path() };
++			if (p.extension() != CHAMPION_EXT)
++				continue;
++			std::wstring const stem{ p.stem().wstring() };
++			if (stem.size() <= prefix.size() || stem.compare(0, prefix.size(), prefix) != 0)
++				continue;
++			std::wstring const digits{ stem.substr(prefix.size()) };
++			if (digits.size() > 18 || digits.find_first_not_of(L"0123456789") != std::wstring::npos)
++				continue;
++			size_t const n{ static_cast<size_t>(std::stoull(digits)) };
++			if (best.empty() || n > game)
++			{
++				best = p;
++				game = n;
++			}
++		}
++		return best;
++	}
++}
++
+ IMPLEMENT_DYNCREATE(CMatchThread, CWinThread)
+ 
+ CMatchThread::CMatchThread()
+@@ -21,13 +60,19 @@ CMatchThread::~CMatchThread()
+ 
+ BOOL CMatchThread::InitInstance()
+ {
+-	std::ifstream s{ CHAMPION_FILENAME, std::ios::binary };
++	size_t game{};
++	auto path{ FindChampion(game) };
++	if (path.empty())
++		path = CHAMPION_LEGACY_FILENAME;		//	saved before the number moved into the name: stays game 0, "loaded from disk"
++
++	std::ifstream s{ path, std::ios::binary };
+ 	if (s)
+ 		try
+ 		{
+ 			auto n{ std::make_unique<NNet>() };
+ 			s >> *n;		//	adopts the shape stored in the file
+ 			m_pChampion = std::move(n);
++			m_uChampionGame = game;
+ 		}
+ 		catch (const std::exception&)
+ 		{
+@@ -108,7 +153,8 @@ MatchScore CMatchThread::PlayMatch(NNet& a, NNet* b)
+ {
+ 	MatchScore sc;
+ 	auto& history{ m_Live.phase == MatchPhase::VsChampion ? m_Live.champGames : m_Live.randGames };
+-	for (int g = 0; g < MATCH_GAMES && !m_bStop; ++g)
++	int const games{ MatchGames(b != nullptr) };
++	for (int g = 0; g < games && !m_bStop; ++g)
+ 	{
+ 		Color const aColor{ g % 2 ? Color::Black : Color::White };
+ 		m_Live.game = g;
+@@ -218,10 +264,28 @@ int CMatchThread::PlayGame(NNet& a, NNet* b, Color aColor)
+ 
+ void CMatchThread::SaveChampion()const
+ {
+-	std::ofstream s{ CHAMPION_FILENAME, std::ios::binary };
+-	if (s)
+-		try { s << *m_pChampion; }
+-	catch (const std::exception&) {}
++	namespace fs = std::filesystem;
++	fs::path const target{ ChampionPath(m_uChampionGame) };
++	fs::path tmp{ target };
++	tmp.replace_extension(L".tmp");		//	never matches champion_<n>.bin: a half-written file cannot become "the latest champion"
++
++	bool ok{ false };
++	{
++		std::ofstream s{ tmp, std::ios::binary };
++		if (s)
++			try
++			{
++				s << *m_pChampion;
++				ok = static_cast<bool>(s);
++			}
++			catch (const std::exception&) {}
++	}		//	closed (flushed) before the rename
++
++	std::error_code ec;
++	if (ok)
++		fs::rename(tmp, target, ec);		//	replaces an existing file on Windows
++	if (!ok || ec)
++		fs::remove(tmp, ec);
+ }
+ 
+ void CMatchThread::AppendCsv(MatchResult const& r)const
+diff --git a/CMatchThread.h b/CMatchThread.h
+index e7ed71f..5c2bd15 100644
+--- a/CMatchThread.h
++++ b/CMatchThread.h
+@@ -6,7 +6,10 @@
+ #include "defines.h"
+ #include "mcts.h"
+ 
+-#define MATCH_GAMES			(50)	//	games per opponent, colours alternate
++#define MATCH_CHAMP_GAMES	(70)	//	games against the champion, colours alternate
++#define MATCH_RANDOM_GAMES	(10)	//	games against a random mover: a sanity check (real nets win them all), so few
++									//	a match has to finish before the next training batch (MATCH_EVERY games): a vs-random game costs about half a vs-champion one,
++									//	because only the challenger searches
+ #define MATCH_PROMOTE		(.60)	//	score needed to become / replace the champion
+ #define MATCH_RANDOM_PLIES	(4u)		//	opening plies played at random, otherwise two deterministic nets replay one game
+ #define MATCH_MAX_PLIES		(400u)	//	safety net: a game that long is a draw
+@@ -42,13 +45,15 @@ struct MatchScore
+ 
+ enum class MatchPhase { Idle, VsChampion, VsRandom };
+ 
++constexpr int MatchGames(bool vsChampion) { return vsChampion ? MATCH_CHAMP_GAMES : MATCH_RANDOM_GAMES; }
++
+ //	snapshot of the match in progress: posted after every game and, at most every 100 ms, while a game is being played
+ struct MatchLive
+ {
+ 	MatchPhase phase{};
+ 	bool hadChampion{};
+ 	size_t championGame{};			//	0 = loaded from disk
+-	int game{};						//	0-based index of the game in progress in this phase; MATCH_GAMES when the phase is complete
++	int game{};						//	0-based index of the game in progress in this phase; the phase's game count when the phase is complete
+ 	bool challengerWhite{};
+ 	bool challengerToMove{};
+ 	size_t ply{};					//	plies played in the current game
+@@ -73,7 +78,8 @@ struct MatchResult
+ //
+ //	Plays challenger-vs-champion and challenger-vs-random matches in the background so the training thread never waits.
+ //	Champion rule: with no champion, a challenger that scores >= MATCH_PROMOTE against random becomes the champion;
+-//	afterwards a challenger that scores >= MATCH_PROMOTE against the champion replaces it. The champion lives in champion.bin.
++//	afterwards a challenger that scores >= MATCH_PROMOTE against the champion replaces it.
++//	Every champion is kept as champion_<training game>.bin; the highest number is the current one (an old unnumbered champion.bin loads as game 0).
+ 
+ class CMatchThread : public CWinThread
+ {
+diff --git a/CMatchWnd.cpp b/CMatchWnd.cpp
+index c7d8918..416430a 100644
+--- a/CMatchWnd.cpp
++++ b/CMatchWnd.cpp
+@@ -202,7 +202,7 @@ void CMatchWnd::Draw(CDC& dc, CRect const& rc)
+ 	bool const running{ started && !m_bCompleted };
+ 	bool const hadChamp{ m_bCompleted ? m_Result.hadChampion : L.hadChampion };
+ 	size_t const champGame{ m_bCompleted ? m_Result.championGame : L.championGame };
+-	int const total{ (hadChamp ? 2 : 1) * MATCH_GAMES };
++	int const total{ (hadChamp ? MATCH_CHAMP_GAMES : 0) + MATCH_RANDOM_GAMES };
+ 	int const done{ int(L.champGames.size() + L.randGames.size()) };
+ 	auto const& vsChamp{ m_Result.vsChampion };
+ 	auto const& vsRand{ m_Result.vsRandom };
+@@ -234,8 +234,8 @@ void CMatchWnd::Draw(CDC& dc, CRect const& rc)
+ 		text(m_fHead, kText, status, pill.left + 30, pill.top + 3);
+ 
+ 		CString s;
+-		s.Format(_T("%d games per opponent  \u00B7  %u sims  \u00B7  promote at %.0f%%  \u00B7  %u random plies  \u00B7  %u ply cap"),
+-			MATCH_GAMES, MATCH_SIMS, MATCH_PROMOTE * 100., MATCH_RANDOM_PLIES, MATCH_MAX_PLIES);
++		s.Format(_T("%d + %d games (champion + random)  \u00B7  %u sims  \u00B7  promote at %.0f%%  \u00B7  %u random plies  \u00B7  %u ply cap"),
++			MATCH_CHAMP_GAMES, MATCH_RANDOM_GAMES, MATCH_SIMS, MATCH_PROMOTE * 100., MATCH_RANDOM_PLIES, MATCH_MAX_PLIES);
+ #ifdef _DEBUG
+ 		s.Append(_T("  (Debug)"));
+ #endif
+@@ -282,9 +282,9 @@ void CMatchWnd::Draw(CDC& dc, CRect const& rc)
+ 			text(m_fTitle, kMuted, title, r.left + 14, r.top + 10);
+ 		};
+ 
+-	auto const pointsBar = [&](CRect const& b, MatchScore const& s)
++	auto const pointsBar = [&](CRect const& b, MatchScore const& s, int games)
+ 		{
+-			double const T{ double(MATCH_GAMES) };
++			double const T{ double(games) };
+ 			auto const px{ [&](double pts) { return int(b.Width() * pts / T + .5); } };
+ 			fill(b, kTrack);
+ 			int const x1{ px(s.w) }, x2{ px(s.w + s.d * .5) }, x3{ max(x2, b.Width() - px(s.l + s.d * .5)) };
+@@ -298,9 +298,9 @@ void CMatchWnd::Draw(CDC& dc, CRect const& rc)
+ 			fill(CRect{ mx - 1, b.top - 3, mx, b.bottom + 3 }, kAccent);
+ 		};
+ 
+-	auto const caption = [&](MatchScore const& s)
++	auto const caption = [&](MatchScore const& s, int games)
+ 		{
+-			double const T{ double(MATCH_GAMES) }, need{ MATCH_PROMOTE * T }, pts{ s.w + s.d * .5 }, rem{ T - s.games() };
++			double const T{ double(games) }, need{ MATCH_PROMOTE * T }, pts{ s.w + s.d * .5 }, rem{ T - s.games() };
+ 			CString c;
+ 			if (pts + 1e-9 >= need)
+ 				c = _T("threshold reached");
+@@ -321,7 +321,7 @@ void CMatchWnd::Draw(CDC& dc, CRect const& rc)
+ 			title.AppendFormat(_T("  \u00B7  NET @ GAME %zu"), m_Result.trainGames);
+ 		card(rResult, title);
+ 
+-		auto const row = [&](int y, CString const& label, MatchScore const& s, bool active, bool available)
++		auto const row = [&](int y, CString const& label, MatchScore const& s, int games, bool active, bool available)
+ 			{
+ 				int const x{ rResult.left + 14 }, right{ rResult.right - 14 };
+ 				text(m_fHead, kText, label, x, y);
+@@ -330,7 +330,7 @@ void CMatchWnd::Draw(CDC& dc, CRect const& rc)
+ 					text(m_fSmall, kMuted, _T("no champion yet: the first net to beat random becomes one"), x, y + 22);
+ 					return;
+ 				}
+-				CString cap{ caption(s) };
++				CString cap{ caption(s, games) };
+ 				if (active)
+ 					cap.Insert(0, _T("playing  \u00B7  "));
+ 				text(m_fSmall, active ? kWin : kMuted, cap, right, y + 2, TA_RIGHT);
+@@ -343,7 +343,7 @@ void CMatchWnd::Draw(CDC& dc, CRect const& rc)
+ 				w.Format(_T("%dW"), s.w);
+ 				d.Format(_T("%dD"), s.d);
+ 				l.Format(_T("%dL"), s.l);
+-				n.Format(_T("%d / %d games"), s.games(), MATCH_GAMES);
++				n.Format(_T("%d / %d games"), s.games(), games);
+ 				text(m_fHead, kWin, w, tx, y + 24);
+ 				tx += width(m_fHead, w) + 10;
+ 				text(m_fHead, kDraw, d, tx, y + 24);
+@@ -352,13 +352,13 @@ void CMatchWnd::Draw(CDC& dc, CRect const& rc)
+ 				tx += width(m_fHead, l) + 14;
+ 				text(m_fSmall, kMuted, n, tx, y + 27);
+ 
+-				pointsBar(CRect{ x, y + 52, right, y + 60 }, s);
++				pointsBar(CRect{ x, y + 52, right, y + 60 }, s, games);
+ 			};
+ 
+ 		int y{ rResult.top + 34 };
+-		row(y, _T("vs champion"), vsChamp, running && L.phase == MatchPhase::VsChampion, hadChamp || !started);
++		row(y, _T("vs champion"), vsChamp, MATCH_CHAMP_GAMES, running && L.phase == MatchPhase::VsChampion, hadChamp || !started);
+ 		y += 76;
+-		row(y, _T("vs random"), vsRand, running && L.phase == MatchPhase::VsRandom, true);
++		row(y, _T("vs random"), vsRand, MATCH_RANDOM_GAMES, running && L.phase == MatchPhase::VsRandom, true);
+ 		y += 76;
+ 
+ 		CString foot;
+@@ -398,15 +398,15 @@ void CMatchWnd::Draw(CDC& dc, CRect const& rc)
+ 			fill(CRect{ bar.left, bar.top, bar.left + bar.Width() * done / total, bar.bottom }, kAccent);
+ 		y += 20;
+ 
+-		auto const strip = [&](CString const& label, std::vector<signed char> const& v, int activeIndex, bool available)
++		auto const strip = [&](CString const& label, std::vector<signed char> const& v, int games, int activeIndex, bool available)
+ 			{
+ 				text(m_fSmall, kMuted, label, x, y);
+ 				y += 18;
+ 				if (!available)
+ 					return;
+-				int const perRow{ (MATCH_GAMES + 1) / 2 }, gap{ 2 };
++				int const perRow{ (games + 1) / 2 }, gap{ 2 };
+ 				int const cell{ max(4, min(14, (right - x - (perRow - 1) * gap) / perRow)) };
+-				for (int i = 0; i < MATCH_GAMES; ++i)
++				for (int i = 0; i < games; ++i)
+ 				{
+ 					CRect c{ x + (i % perRow) * (cell + gap), y + (i / perRow) * (cell + gap), 0, 0 };
+ 					c.right = c.left + cell;
+@@ -419,8 +419,8 @@ void CMatchWnd::Draw(CDC& dc, CRect const& rc)
+ 			};
+ 
+ 		bool const champActive{ running && L.phase == MatchPhase::VsChampion }, randActive{ running && L.phase == MatchPhase::VsRandom };
+-		strip(hadChamp ? _T("vs champion") : _T("vs champion  (none yet)"), L.champGames, champActive ? L.game : -1, hadChamp);
+-		strip(_T("vs random"), L.randGames, randActive ? L.game : -1, true);
++		strip(hadChamp ? _T("vs champion") : _T("vs champion  (none yet)"), L.champGames, MATCH_CHAMP_GAMES, champActive ? L.game : -1, hadChamp);
++		strip(_T("vs random"), L.randGames, MATCH_RANDOM_GAMES, randActive ? L.game : -1, true);
+ 
+ 		CString t;
+ 		if (started)
+@@ -443,7 +443,7 @@ void CMatchWnd::Draw(CDC& dc, CRect const& rc)
+ 
+ 		CString title;
+ 		if (running && L.phase != MatchPhase::Idle)
+-			title.Format(_T("GAME %d / %d  \u00B7  PLY %zu"), min(L.game + 1, MATCH_GAMES), MATCH_GAMES, L.ply);
++			title.Format(_T("GAME %d / %d  \u00B7  PLY %zu"), min(L.game + 1, MatchGames(L.phase == MatchPhase::VsChampion)), MatchGames(L.phase == MatchPhase::VsChampion), L.ply);
+ 		else
+ 			title = m_bCompleted ? _T("LAST POSITION") : _T("BOARD");
+ 		card(rBoard, title);

@@ -202,7 +202,7 @@ void CMatchWnd::Draw(CDC& dc, CRect const& rc)
 	bool const running{ started && !m_bCompleted };
 	bool const hadChamp{ m_bCompleted ? m_Result.hadChampion : L.hadChampion };
 	size_t const champGame{ m_bCompleted ? m_Result.championGame : L.championGame };
-	int const total{ (hadChamp ? 2 : 1) * MATCH_GAMES };
+	int const total{ (hadChamp ? MATCH_CHAMP_GAMES : 0) + MATCH_RANDOM_GAMES };
 	int const done{ int(L.champGames.size() + L.randGames.size()) };
 	auto const& vsChamp{ m_Result.vsChampion };
 	auto const& vsRand{ m_Result.vsRandom };
@@ -234,8 +234,8 @@ void CMatchWnd::Draw(CDC& dc, CRect const& rc)
 		text(m_fHead, kText, status, pill.left + 30, pill.top + 3);
 
 		CString s;
-		s.Format(_T("%d games per opponent  \u00B7  %u sims  \u00B7  promote at %.0f%%  \u00B7  %u random plies  \u00B7  %u ply cap"),
-			MATCH_GAMES, MATCH_SIMS, MATCH_PROMOTE * 100., MATCH_RANDOM_PLIES, MATCH_MAX_PLIES);
+		s.Format(_T("%d + %d games (champion + random)  \u00B7  %u sims  \u00B7  promote at %.0f%%  \u00B7  %u random plies  \u00B7  %u ply cap"),
+			MATCH_CHAMP_GAMES, MATCH_RANDOM_GAMES, MATCH_SIMS, MATCH_PROMOTE * 100., MATCH_RANDOM_PLIES, MATCH_MAX_PLIES);
 #ifdef _DEBUG
 		s.Append(_T("  (Debug)"));
 #endif
@@ -282,9 +282,9 @@ void CMatchWnd::Draw(CDC& dc, CRect const& rc)
 			text(m_fTitle, kMuted, title, r.left + 14, r.top + 10);
 		};
 
-	auto const pointsBar = [&](CRect const& b, MatchScore const& s)
+	auto const pointsBar = [&](CRect const& b, MatchScore const& s, int games)
 		{
-			double const T{ double(MATCH_GAMES) };
+			double const T{ double(games) };
 			auto const px{ [&](double pts) { return int(b.Width() * pts / T + .5); } };
 			fill(b, kTrack);
 			int const x1{ px(s.w) }, x2{ px(s.w + s.d * .5) }, x3{ max(x2, b.Width() - px(s.l + s.d * .5)) };
@@ -298,9 +298,9 @@ void CMatchWnd::Draw(CDC& dc, CRect const& rc)
 			fill(CRect{ mx - 1, b.top - 3, mx, b.bottom + 3 }, kAccent);
 		};
 
-	auto const caption = [&](MatchScore const& s)
+	auto const caption = [&](MatchScore const& s, int games)
 		{
-			double const T{ double(MATCH_GAMES) }, need{ MATCH_PROMOTE * T }, pts{ s.w + s.d * .5 }, rem{ T - s.games() };
+			double const T{ double(games) }, need{ MATCH_PROMOTE * T }, pts{ s.w + s.d * .5 }, rem{ T - s.games() };
 			CString c;
 			if (pts + 1e-9 >= need)
 				c = _T("threshold reached");
@@ -321,7 +321,7 @@ void CMatchWnd::Draw(CDC& dc, CRect const& rc)
 			title.AppendFormat(_T("  \u00B7  NET @ GAME %zu"), m_Result.trainGames);
 		card(rResult, title);
 
-		auto const row = [&](int y, CString const& label, MatchScore const& s, bool active, bool available)
+		auto const row = [&](int y, CString const& label, MatchScore const& s, int games, bool active, bool available)
 			{
 				int const x{ rResult.left + 14 }, right{ rResult.right - 14 };
 				text(m_fHead, kText, label, x, y);
@@ -330,7 +330,7 @@ void CMatchWnd::Draw(CDC& dc, CRect const& rc)
 					text(m_fSmall, kMuted, _T("no champion yet: the first net to beat random becomes one"), x, y + 22);
 					return;
 				}
-				CString cap{ caption(s) };
+				CString cap{ caption(s, games) };
 				if (active)
 					cap.Insert(0, _T("playing  \u00B7  "));
 				text(m_fSmall, active ? kWin : kMuted, cap, right, y + 2, TA_RIGHT);
@@ -343,7 +343,7 @@ void CMatchWnd::Draw(CDC& dc, CRect const& rc)
 				w.Format(_T("%dW"), s.w);
 				d.Format(_T("%dD"), s.d);
 				l.Format(_T("%dL"), s.l);
-				n.Format(_T("%d / %d games"), s.games(), MATCH_GAMES);
+				n.Format(_T("%d / %d games"), s.games(), games);
 				text(m_fHead, kWin, w, tx, y + 24);
 				tx += width(m_fHead, w) + 10;
 				text(m_fHead, kDraw, d, tx, y + 24);
@@ -352,13 +352,13 @@ void CMatchWnd::Draw(CDC& dc, CRect const& rc)
 				tx += width(m_fHead, l) + 14;
 				text(m_fSmall, kMuted, n, tx, y + 27);
 
-				pointsBar(CRect{ x, y + 52, right, y + 60 }, s);
+				pointsBar(CRect{ x, y + 52, right, y + 60 }, s, games);
 			};
 
 		int y{ rResult.top + 34 };
-		row(y, _T("vs champion"), vsChamp, running && L.phase == MatchPhase::VsChampion, hadChamp || !started);
+		row(y, _T("vs champion"), vsChamp, MATCH_CHAMP_GAMES, running && L.phase == MatchPhase::VsChampion, hadChamp || !started);
 		y += 76;
-		row(y, _T("vs random"), vsRand, running && L.phase == MatchPhase::VsRandom, true);
+		row(y, _T("vs random"), vsRand, MATCH_RANDOM_GAMES, running && L.phase == MatchPhase::VsRandom, true);
 		y += 76;
 
 		CString foot;
@@ -398,15 +398,15 @@ void CMatchWnd::Draw(CDC& dc, CRect const& rc)
 			fill(CRect{ bar.left, bar.top, bar.left + bar.Width() * done / total, bar.bottom }, kAccent);
 		y += 20;
 
-		auto const strip = [&](CString const& label, std::vector<signed char> const& v, int activeIndex, bool available)
+		auto const strip = [&](CString const& label, std::vector<signed char> const& v, int games, int activeIndex, bool available)
 			{
 				text(m_fSmall, kMuted, label, x, y);
 				y += 18;
 				if (!available)
 					return;
-				int const perRow{ (MATCH_GAMES + 1) / 2 }, gap{ 2 };
+				int const perRow{ (games + 1) / 2 }, gap{ 2 };
 				int const cell{ max(4, min(14, (right - x - (perRow - 1) * gap) / perRow)) };
-				for (int i = 0; i < MATCH_GAMES; ++i)
+				for (int i = 0; i < games; ++i)
 				{
 					CRect c{ x + (i % perRow) * (cell + gap), y + (i / perRow) * (cell + gap), 0, 0 };
 					c.right = c.left + cell;
@@ -419,8 +419,8 @@ void CMatchWnd::Draw(CDC& dc, CRect const& rc)
 			};
 
 		bool const champActive{ running && L.phase == MatchPhase::VsChampion }, randActive{ running && L.phase == MatchPhase::VsRandom };
-		strip(hadChamp ? _T("vs champion") : _T("vs champion  (none yet)"), L.champGames, champActive ? L.game : -1, hadChamp);
-		strip(_T("vs random"), L.randGames, randActive ? L.game : -1, true);
+		strip(hadChamp ? _T("vs champion") : _T("vs champion  (none yet)"), L.champGames, MATCH_CHAMP_GAMES, champActive ? L.game : -1, hadChamp);
+		strip(_T("vs random"), L.randGames, MATCH_RANDOM_GAMES, randActive ? L.game : -1, true);
 
 		CString t;
 		if (started)
@@ -443,7 +443,7 @@ void CMatchWnd::Draw(CDC& dc, CRect const& rc)
 
 		CString title;
 		if (running && L.phase != MatchPhase::Idle)
-			title.Format(_T("GAME %d / %d  \u00B7  PLY %zu"), min(L.game + 1, MATCH_GAMES), MATCH_GAMES, L.ply);
+			title.Format(_T("GAME %d / %d  \u00B7  PLY %zu"), min(L.game + 1, MatchGames(L.phase == MatchPhase::VsChampion)), MatchGames(L.phase == MatchPhase::VsChampion), L.ply);
 		else
 			title = m_bCompleted ? _T("LAST POSITION") : _T("BOARD");
 		card(rBoard, title);

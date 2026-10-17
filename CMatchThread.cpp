@@ -8,8 +8,47 @@
 using namespace game;
 using namespace mcts;
 
-#define CHAMPION_FILENAME	_T("champion.bin")
+#define CHAMPION_LEGACY_FILENAME	_T("champion.bin")	//	before the game number moved into the file name
+#define CHAMPION_PREFIX				L"champion_"			//	champion_<training game>.bin
+#define CHAMPION_EXT				L".bin"
 #define MATCHES_FILENAME	_T("matches.csv")
+
+namespace
+{
+	std::filesystem::path ChampionPath(size_t game)
+	{
+		return std::filesystem::path{ std::wstring{ CHAMPION_PREFIX } + std::to_wstring(game) + CHAMPION_EXT };
+	}
+
+	//	the champion_<game>.bin with the highest game number in the working directory; empty path if there is none
+	std::filesystem::path FindChampion(size_t& game)
+	{
+		namespace fs = std::filesystem;
+		std::wstring const prefix{ CHAMPION_PREFIX };
+		fs::path best;
+		game = 0;
+		std::error_code ec;
+		for (fs::directory_iterator it{ fs::path{ L"." }, ec }, end; !ec && it != end; it.increment(ec))
+		{
+			fs::path const& p{ it->path() };
+			if (p.extension() != CHAMPION_EXT)
+				continue;
+			std::wstring const stem{ p.stem().wstring() };
+			if (stem.size() <= prefix.size() || stem.compare(0, prefix.size(), prefix) != 0)
+				continue;
+			std::wstring const digits{ stem.substr(prefix.size()) };
+			if (digits.size() > 18 || digits.find_first_not_of(L"0123456789") != std::wstring::npos)
+				continue;
+			size_t const n{ static_cast<size_t>(std::stoull(digits)) };
+			if (best.empty() || n > game)
+			{
+				best = p;
+				game = n;
+			}
+		}
+		return best;
+	}
+}
 
 IMPLEMENT_DYNCREATE(CMatchThread, CWinThread)
 
@@ -21,13 +60,19 @@ CMatchThread::~CMatchThread()
 
 BOOL CMatchThread::InitInstance()
 {
-	std::ifstream s{ CHAMPION_FILENAME, std::ios::binary };
+	size_t game{};
+	auto path{ FindChampion(game) };
+	if (path.empty())
+		path = CHAMPION_LEGACY_FILENAME;		//	saved before the number moved into the name: stays game 0, "loaded from disk"
+
+	std::ifstream s{ path, std::ios::binary };
 	if (s)
 		try
 		{
 			auto n{ std::make_unique<NNet>() };
 			s >> *n;		//	adopts the shape stored in the file
 			m_pChampion = std::move(n);
+			m_uChampionGame = game;
 		}
 		catch (const std::exception&)
 		{
@@ -108,7 +153,8 @@ MatchScore CMatchThread::PlayMatch(NNet& a, NNet* b)
 {
 	MatchScore sc;
 	auto& history{ m_Live.phase == MatchPhase::VsChampion ? m_Live.champGames : m_Live.randGames };
-	for (int g = 0; g < MATCH_GAMES && !m_bStop; ++g)
+	int const games{ MatchGames(b != nullptr) };
+	for (int g = 0; g < games && !m_bStop; ++g)
 	{
 		Color const aColor{ g % 2 ? Color::Black : Color::White };
 		m_Live.game = g;
@@ -218,10 +264,28 @@ int CMatchThread::PlayGame(NNet& a, NNet* b, Color aColor)
 
 void CMatchThread::SaveChampion()const
 {
-	std::ofstream s{ CHAMPION_FILENAME, std::ios::binary };
-	if (s)
-		try { s << *m_pChampion; }
-	catch (const std::exception&) {}
+	namespace fs = std::filesystem;
+	fs::path const target{ ChampionPath(m_uChampionGame) };
+	fs::path tmp{ target };
+	tmp.replace_extension(L".tmp");		//	never matches champion_<n>.bin: a half-written file cannot become "the latest champion"
+
+	bool ok{ false };
+	{
+		std::ofstream s{ tmp, std::ios::binary };
+		if (s)
+			try
+			{
+				s << *m_pChampion;
+				ok = static_cast<bool>(s);
+			}
+			catch (const std::exception&) {}
+	}		//	closed (flushed) before the rename
+
+	std::error_code ec;
+	if (ok)
+		fs::rename(tmp, target, ec);		//	replaces an existing file on Windows
+	if (!ok || ec)
+		fs::remove(tmp, ec);
 }
 
 void CMatchThread::AppendCsv(MatchResult const& r)const
