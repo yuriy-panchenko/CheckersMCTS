@@ -5,7 +5,7 @@
 
 namespace heuristic
 {
-	struct Node;
+	class Node;
 
 	struct Edge
 	{
@@ -27,26 +27,33 @@ namespace heuristic
 			for (auto& m : g.GetAvailableMoves())
 				edges.emplace_back(m);
 		}
-		Node* expand(int depth)
+
+		bool expand(int depth)
 		{
-			assert(depth > 0);
+			assert(depth > -1);
 
-			for (auto& e : edges)
-				if (!e.pNode)
-				{
-					auto s2{ state };
-					s2.Do(e.move);
-					e.pNode = new Node{ s2, this };
-					return e.pNode;
-				}
-
-			if(depth>1)
+			if (depth)
+			{
+				size_t iExpanded{};
 				for (auto& e : edges)
 				{
-					//if(!e.pNode->expand(depth-1))
+					assert(e.pNode);
+					if (e.pNode->expand(depth - 1))
+						++iExpanded;
 				}
-
-			return nullptr;
+				return iExpanded;
+			}
+			else
+			{
+				for (auto& e : edges)
+					if (!e.pNode)
+					{
+						auto s2{ state };
+						s2.Do(e.move);
+						e.pNode = new Node{ s2, this };
+					}
+				return !edges.empty();
+			}
 		}
 	};
 
@@ -59,13 +66,16 @@ namespace heuristic
 			: m_Root{ new Node{ g, nullptr } }
 		{}
 
-		bool explore_next()	//	returns false if no more edges to explorer left
+		game::Move explore(int const maxDepth, int const maxMoves, int const maxTimeMs)	//	returns false if no more edges/moves
 		{
-			return m_Root->expand();
+			for (int iDepth = 0; iDepth < maxDepth; iDepth++)
+				if (!m_Root->expand(iDepth))
+					break;
+
+
+			Moves poss;
+			//
+			return poss.empty() ? game::Move{} : poss.front();
 		}
-
-		game::Move get_best()const;
-
-
 	};
 }

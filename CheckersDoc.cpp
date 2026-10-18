@@ -46,7 +46,7 @@ constexpr auto
 section_key{ _T("Settings") },
 white_human{ _T("WhiteIsHuman") },
 black_human{ _T("BlackIsHuman") };
-
+#include "desc_tree.h"
 CCheckersDoc::CCheckersDoc() noexcept
 	:m_isWhiteHuman{ FALSE }
 	, m_isBlackHuman{ FALSE }
@@ -58,6 +58,10 @@ CCheckersDoc::CCheckersDoc() noexcept
 	m_isWhiteHuman = theApp.GetProfileInt(section_key, white_human, TRUE);
 	m_isBlackHuman = theApp.GetProfileInt(section_key, black_human, FALSE);
 	m_bRunning = !(m_isBlackHuman || m_isWhiteHuman);
+
+	heuristic::Tree tree{ game::Checkers{ game::Color::White } };
+	auto const m{ tree.explore(4, 20'000, 300) };
+	int y = 0;
 }
 
 game::Board const& CCheckersDoc::GetBoard() const
@@ -134,7 +138,7 @@ void CCheckersDoc::OnMatchFinished(MatchResult const& r)
 	if (r.hadChampion)
 		champ.Format(_T("vs champion (since game %zu) +%d =%d -%d: %.3f | "), r.championGame, r.vsChampion.w, r.vsChampion.d, r.vsChampion.l, r.vsChampion.value());
 	str.Format(_T("MATCH @%zu: %svs random +%d =%d -%d: %.3f%s"), r.trainGames, (LPCTSTR)champ,
-		r.vsRandom.w, r.vsRandom.d, r.vsRandom.l, r.vsRandom.value(), r.promoted ? _T(" | NEW CHAMPION") : r.exhibition ? _T(" | exhibition, not recorded") : _T(""));
+		r.vsRandom.w, r.vsRandom.d, r.vsRandom.l, r.vsRandom.value(), r.promoted ? _T(" | NEW CHAMPION") : _T(""));
 	out.AddDebugString(str);
 	out.AddMatchData(r);
 }

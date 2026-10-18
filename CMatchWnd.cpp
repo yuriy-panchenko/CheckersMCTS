@@ -45,7 +45,6 @@ IMPLEMENT_DYNAMIC(CMatchWnd, CWnd)
 CMatchWnd::CMatchWnd()
 	:m_Result{}
 	, m_bCompleted{ FALSE }
-	, m_bStarted{ FALSE }
 {}
 
 CMatchWnd::~CMatchWnd()
@@ -65,11 +64,9 @@ void CMatchWnd::SetScore(BOOL vsNet, MatchScore const& score)
 
 void CMatchWnd::Reset(size_t id)
 {
-	m_bStarted = TRUE;
 	m_bCompleted = FALSE;
 	m_Result.vsChampion = m_Result.vsRandom = {};
 	m_Result.promoted = false;
-	m_Result.exhibition = false;
 	m_Result.trainGames = id;
 	m_Live = MatchLive{};
 	Refresh();
@@ -201,7 +198,7 @@ void CMatchWnd::Draw(CDC& dc, CRect const& rc)
 
 	////////////////////////////////////////////////////////////////////////////////////// what is going on
 	MatchLive const& L{ m_Live };
-	bool const started{ m_bStarted != FALSE };
+	bool const started{ m_Result.trainGames != 0 };
 	bool const running{ started && !m_bCompleted };
 	bool const hadChamp{ m_bCompleted ? m_Result.hadChampion : L.hadChampion };
 	size_t const champGame{ m_bCompleted ? m_Result.championGame : L.championGame };
@@ -253,10 +250,7 @@ void CMatchWnd::Draw(CDC& dc, CRect const& rc)
 				champ.Format(_T("net @ game %zu"), champGame);
 			else
 				champ = _T("loaded from disk");
-			if (m_Result.trainGames == 0)
-				s = _T("Testing the untrained net  \u00B7  exhibition: not counted, nothing is saved");
-			else
-				s.Format(_T("Testing net @ game %zu  \u00B7  champion: %s"), m_Result.trainGames, (LPCTSTR)champ);
+			s.Format(_T("Testing net @ game %zu  \u00B7  champion: %s"), m_Result.trainGames, (LPCTSTR)champ);
 			text(m_fSmall, kMuted, s, M + 2, M + 32);
 		}
 	}
@@ -324,12 +318,7 @@ void CMatchWnd::Draw(CDC& dc, CRect const& rc)
 
 		CString title{ _T("RESULT") };
 		if (started)
-		{
-			if (m_Result.trainGames == 0)
-				title.Append(_T("  \u00B7  UNTRAINED NET"));
-			else
-				title.AppendFormat(_T("  \u00B7  NET @ GAME %zu"), m_Result.trainGames);
-		}
+			title.AppendFormat(_T("  \u00B7  NET @ GAME %zu"), m_Result.trainGames);
 		card(rResult, title);
 
 		auto const row = [&](int y, CString const& label, MatchScore const& s, int games, bool active, bool available)
@@ -376,7 +365,7 @@ void CMatchWnd::Draw(CDC& dc, CRect const& rc)
 		COLORREF fc{ kMuted };
 		if (m_bCompleted)
 		{
-			foot = m_Result.exhibition ? _T("exhibition match: not counted") : m_Result.promoted ? _T("\u2605  PROMOTED: new champion") : _T("not promoted");
+			foot = m_Result.promoted ? _T("\u2605  PROMOTED: new champion") : _T("not promoted");
 			fc = m_Result.promoted ? kAccent : kMuted;
 		}
 		else

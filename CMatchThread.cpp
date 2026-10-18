@@ -112,8 +112,7 @@ void CMatchThread::OnRunMatch(WPARAM, LPARAM lp)
 
 	auto res{ std::make_unique<MatchResult>() };
 	res->trainGames = job->trainGames;
-	res->exhibition = job->exhibition;
-	res->hadChampion = m_pChampion && !job->exhibition;		//	an exhibition plays random only
+	res->hadChampion = (bool)m_pChampion;
 	res->championGame = m_uChampionGame;
 
 	m_Live = MatchLive{};
@@ -122,7 +121,7 @@ void CMatchThread::OnRunMatch(WPARAM, LPARAM lp)
 	m_tStart = ::GetTickCount64();
 	m_tLastPost = 0;
 
-	if (res->hadChampion)
+	if (m_pChampion)
 	{
 		m_Live.phase = MatchPhase::VsChampion;
 		res->vsChampion = PlayMatch(job->net, m_pChampion.get());
@@ -136,15 +135,14 @@ void CMatchThread::OnRunMatch(WPARAM, LPARAM lp)
 		return;
 	}
 
-	res->promoted = !job->exhibition && (res->hadChampion ? res->vsChampion : res->vsRandom).value() >= MATCH_PROMOTE;
+	res->promoted = (res->hadChampion ? res->vsChampion : res->vsRandom).value() >= MATCH_PROMOTE;
 	if (res->promoted)
 	{
 		m_pChampion = std::make_unique<NNet>(job->net);
 		m_uChampionGame = job->trainGames;
 		SaveChampion();
 	}
-	if (!job->exhibition)
-		AppendCsv(*res);
+	AppendCsv(*res);
 
 	m_bBusy = false;
 	if (auto const h{ m_hNotify.load() })

@@ -32,7 +32,6 @@ private:
 private:
 	MatchResult m_Result;
 	BOOL m_bCompleted;
-	BOOL m_bStarted;		//	a match has been announced (trainGames can be 0 for the exhibition, so it cannot tell)
 	MatchLive m_Live;
 	CFont m_fBig, m_fHead, m_fSmall, m_fTitle;
 };

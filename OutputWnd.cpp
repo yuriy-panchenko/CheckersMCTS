@@ -208,12 +208,6 @@ void COutputWnd::AddChartData(double db)
 
 void COutputWnd::AddMatchData(MatchResult const& r)
 {
-	if (r.exhibition)		//	the untrained-net show: Match tab only; the charts add points by position and are saved to disk
-	{
-		m_wndMatch.SetResult(r);
-		return;
-	}
-
 	double vsChampion = r.hadChampion ? r.vsChampion.value() : std::numeric_limits<double>::quiet_NaN();
 	double vsRandom = r.vsRandom.value();
 	if (!std::isnan(vsChampion))

@@ -19,7 +19,6 @@ using namespace mcts;
 #define VALUE_MIX_START	(.3)
 #define VALUE_MIX_GAMES	(1500.)
 #define MATERIAL_SCALE	(4.)
-#define MATCH_EVERY	(100)	//	training games between background matches (see CMatchThread.cpp)
 #define NNET_FILENAME	_T("net.bin")
 #define STATS_FILENAME	_T("games.csv")
 
@@ -54,7 +53,6 @@ BOOL CLearningThread::InitInstance()
 	m_Net.init();
 
 	std::ifstream s{ NNET_FILENAME, std::ios::binary };
-	bool const hadNet{ static_cast<bool>(s) };
 	if (s)
 		try { s >> m_Net; }
 	catch (const std::exception& e)
@@ -63,16 +61,11 @@ BOOL CLearningThread::InitInstance()
 	}
 
 	//	background matches: low priority, same notify window as ours
-	m_pMatchTh = static_cast<CMatchThread*>(::AfxBeginThread(RUNTIME_CLASS(CMatchThread), 0, 0, CREATE_SUSPENDED));
+	m_pMatchTh = static_cast<CMatchThread*>(::AfxBeginThread(RUNTIME_CLASS(CMatchThread), THREAD_PRIORITY_BELOW_NORMAL, 0, CREATE_SUSPENDED));
 	if (m_pMatchTh)
 	{
 		m_pMatchTh->SetNotifyWnd(m_hNotify.load());
 		m_pMatchTh->ResumeThread();
-
-		//	the very first start (no net, no games): the untrained net plays the random mover once, just for the show.
-		//	Not a checkpoint: game 0, never promoted, nothing recorded. If it is still running when game 100 arrives, that checkpoint is skipped.
-		if (!hadNet && m_Stats.games() == 0)
-			m_pMatchTh->Submit(std::make_unique<MatchJob>(0, m_Net, true));
 	}
 
 	PostThreadMessage(WM_NEW_GAME, 0, 0);
@@ -251,8 +244,9 @@ void CLearningThread::EndGame(std::optional<Color> winner, GameStats::Reason why
 		::MessageBox(NULL, CA2W{ e.what() }, _T("Error saving nnet!"), MB_OK | MB_ICONERROR);
 	}
 
-	//	a frozen copy of the net goes to the match thread; if the previous match is still running this checkpoint is skipped
-	if (m_pMatchTh && m_Stats.games() % MATCH_EVERY == 0)
+	//	the match thread plays all the time: when it is free it gets a frozen copy of the net as it is now, whatever the game count.
+	//	The copy is made here, between two games: the only moment the net is not being changed.
+	if (m_pMatchTh && m_pMatchTh->IsIdle())
 		m_pMatchTh->Submit(std::make_unique<MatchJob>(m_Stats.games(), m_Net));
 
 	m_bOver = true;
