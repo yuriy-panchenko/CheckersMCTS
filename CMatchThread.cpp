@@ -4,6 +4,7 @@
 
 #include "pch.h"
 #include "CMatchThread.h"
+#include "HeuristicTree.h"
 
 using namespace game;
 using namespace mcts;
@@ -111,7 +112,8 @@ void CMatchThread::OnRunMatch(WPARAM, LPARAM lp)
 
 	auto res{ std::make_unique<MatchResult>() };
 	res->trainGames = job->trainGames;
-	res->hadChampion = (bool)m_pChampion;
+	res->exhibition = job->exhibition;
+	res->hadChampion = m_pChampion && !job->exhibition;		//	an exhibition plays random only
 	res->championGame = m_uChampionGame;
 
 	m_Live = MatchLive{};
@@ -120,7 +122,7 @@ void CMatchThread::OnRunMatch(WPARAM, LPARAM lp)
 	m_tStart = ::GetTickCount64();
 	m_tLastPost = 0;
 
-	if (m_pChampion)
+	if (res->hadChampion)
 	{
 		m_Live.phase = MatchPhase::VsChampion;
 		res->vsChampion = PlayMatch(job->net, m_pChampion.get());
@@ -134,14 +136,15 @@ void CMatchThread::OnRunMatch(WPARAM, LPARAM lp)
 		return;
 	}
 
-	res->promoted = (res->hadChampion ? res->vsChampion : res->vsRandom).value() >= MATCH_PROMOTE;
+	res->promoted = !job->exhibition && (res->hadChampion ? res->vsChampion : res->vsRandom).value() >= MATCH_PROMOTE;
 	if (res->promoted)
 	{
 		m_pChampion = std::make_unique<NNet>(job->net);
 		m_uChampionGame = job->trainGames;
 		SaveChampion();
 	}
-	AppendCsv(*res);
+	if (!job->exhibition)
+		AppendCsv(*res);
 
 	m_bBusy = false;
 	if (auto const h{ m_hNotify.load() })
@@ -216,6 +219,14 @@ int CMatchThread::PlayGame(NNet& a, NNet* b, Color aColor)
 	for (auto& s : side)		//	same start as the learning thread: Black "to move", Do({}) hands the first move to White
 		s.tree->current_state().Do(Move{});
 
+	//	the opponent without a net (b == nullptr) has its own tree, which is not MCTS; it is told about every ply so it follows the real game
+	std::unique_ptr<heur::Tree> opp;
+	if (!b)
+	{
+		opp = std::make_unique<heur::Tree>(heur::Limits{ MATCH_HEUR_DEPTH, MATCH_HEUR_NODES }, static_cast<unsigned>(m_Rng()));
+		opp->Reset(side[1].tree->current_state());
+	}
+
 	auto const result{ [&](std::optional<Color> winner) { return !winner ? 0 : *winner == aColor ? 1 : -1; } };
 
 	for (size_t ply = 0; !m_bStop; ++ply)
@@ -245,8 +256,13 @@ int CMatchThread::PlayGame(NNet& a, NNet* b, Color aColor)
 		Move m;
 		if (moves.size() == 1)			//	no choice, no search
 			m = moves.front();
-		else if (!s.net || ply < MATCH_RANDOM_PLIES)
+		else if (ply < MATCH_RANDOM_PLIES)	//	random opening for both sides, or two deterministic players replay one game
 			m = moves[std::uniform_int_distribution<size_t>{ 0, moves.size() - 1 }(m_Rng)];
+		else if (!s.net)
+		{
+			m = opp->Choose();
+			ASSERT(std::find(moves.begin(), moves.end(), m) != moves.end());	//	the heuristic tree is out of step with the game
+		}
 		else
 		{
 			//	no root noise and most-visited move: a match measures strength, not exploration
@@ -256,6 +272,8 @@ int CMatchThread::PlayGame(NNet& a, NNet* b, Color aColor)
 		}
 
 		m_Live.lastMove = game::ToString(m);
+		if (opp)
+			opp->Advance(m);
 		for (auto& t : side)
 			t.tree->advance_root(m);
 	}

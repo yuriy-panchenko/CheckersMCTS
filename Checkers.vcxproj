@@ -206,6 +206,7 @@
     <ClInclude Include="CLearningThread.h" />
     <ClInclude Include="CMatchThread.h" />
     <ClInclude Include="CMatchWnd.h" />
+    <ClInclude Include="HeuristicTree.h" />
     <ClInclude Include="defines.h" />
     <ClInclude Include="desc_tree.h" />
     <ClInclude Include="framework.h" />
@@ -226,6 +227,7 @@
     <ClCompile Include="CLearningThread.cpp" />
     <ClCompile Include="CMatchThread.cpp" />
     <ClCompile Include="CMatchWnd.cpp" />
+    <ClCompile Include="HeuristicTree.cpp" />
     <ClCompile Include="defines.cpp" />
     <ClCompile Include="MainFrm.cpp" />
     <ClCompile Include="mcts.cpp" />

@@ -1,0 +1,223 @@
+diff --git a/CMatchThread.cpp b/CMatchThread.cpp
+index c094abe..ba38339 100644
+--- a/CMatchThread.cpp
++++ b/CMatchThread.cpp
+@@ -4,6 +4,7 @@
+ 
+ #include "pch.h"
+ #include "CMatchThread.h"
++#include "HeuristicTree.h"
+ 
+ using namespace game;
+ using namespace mcts;
+@@ -216,6 +217,14 @@ int CMatchThread::PlayGame(NNet& a, NNet* b, Color aColor)
+ 	for (auto& s : side)		//	same start as the learning thread: Black "to move", Do({}) hands the first move to White
+ 		s.tree->current_state().Do(Move{});
+ 
++	//	the opponent without a net (b == nullptr) has its own tree, which is not MCTS; it is told about every ply so it follows the real game
++	std::unique_ptr<heur::Tree> opp;
++	if (!b)
++	{
++		opp = std::make_unique<heur::Tree>(heur::Limits{ MATCH_HEUR_DEPTH, MATCH_HEUR_NODES }, static_cast<unsigned>(m_Rng()));
++		opp->Reset(side[1].tree->current_state());
++	}
++
+ 	auto const result{ [&](std::optional<Color> winner) { return !winner ? 0 : *winner == aColor ? 1 : -1; } };
+ 
+ 	for (size_t ply = 0; !m_bStop; ++ply)
+@@ -245,8 +254,13 @@ int CMatchThread::PlayGame(NNet& a, NNet* b, Color aColor)
+ 		Move m;
+ 		if (moves.size() == 1)			//	no choice, no search
+ 			m = moves.front();
+-		else if (!s.net || ply < MATCH_RANDOM_PLIES)
++		else if (ply < MATCH_RANDOM_PLIES)	//	random opening for both sides, or two deterministic players replay one game
+ 			m = moves[std::uniform_int_distribution<size_t>{ 0, moves.size() - 1 }(m_Rng)];
++		else if (!s.net)
++		{
++			m = opp->Choose();
++			ASSERT(std::find(moves.begin(), moves.end(), m) != moves.end());	//	the heuristic tree is out of step with the game
++		}
+ 		else
+ 		{
+ 			//	no root noise and most-visited move: a match measures strength, not exploration
+@@ -256,6 +270,8 @@ int CMatchThread::PlayGame(NNet& a, NNet* b, Color aColor)
+ 		}
+ 
+ 		m_Live.lastMove = game::ToString(m);
++		if (opp)
++			opp->Advance(m);
+ 		for (auto& t : side)
+ 			t.tree->advance_root(m);
+ 	}
+diff --git a/CMatchThread.h b/CMatchThread.h
+index 5c2bd15..6bac4ea 100644
+--- a/CMatchThread.h
++++ b/CMatchThread.h
+@@ -7,6 +7,8 @@
+ #include "mcts.h"
+ 
+ #define MATCH_CHAMP_GAMES	(70)	//	games against the champion, colours alternate
++#define MATCH_HEUR_DEPTH	(4)		//	the no-net opponent (heur::Tree): plies (jumps) it looks ahead
++#define MATCH_HEUR_NODES	(20000u)	//	and its budget of positions per move, 0 = depth only
+ #define MATCH_RANDOM_GAMES	(10)	//	games against a random mover: a sanity check (real nets win them all), so few
+ 									//	a match has to finish before the next training batch (MATCH_EVERY games): a vs-random game costs about half a vs-champion one,
+ 									//	because only the challenger searches
+diff --git a/Checkers.vcxproj b/Checkers.vcxproj
+index 07ad937..2e99a1b 100644
+--- a/Checkers.vcxproj
++++ b/Checkers.vcxproj
+@@ -206,6 +206,7 @@
+     <ClInclude Include="CLearningThread.h" />
+     <ClInclude Include="CMatchThread.h" />
+     <ClInclude Include="CMatchWnd.h" />
++    <ClInclude Include="HeuristicTree.h" />
+     <ClInclude Include="defines.h" />
+     <ClInclude Include="desc_tree.h" />
+     <ClInclude Include="framework.h" />
+@@ -226,6 +227,7 @@
+     <ClCompile Include="CLearningThread.cpp" />
+     <ClCompile Include="CMatchThread.cpp" />
+     <ClCompile Include="CMatchWnd.cpp" />
++    <ClCompile Include="HeuristicTree.cpp" />
+     <ClCompile Include="defines.cpp" />
+     <ClCompile Include="MainFrm.cpp" />
+     <ClCompile Include="mcts.cpp" />
+diff --git a/Checkers.vcxproj.filters b/Checkers.vcxproj.filters
+index d1e4589..942e91a 100644
+--- a/Checkers.vcxproj.filters
++++ b/Checkers.vcxproj.filters
+@@ -69,6 +69,9 @@
+     <ClInclude Include="CMatchWnd.h">
+       <Filter>Header Files</Filter>
+     </ClInclude>
++    <ClInclude Include="HeuristicTree.h">
++      <Filter>Header Files</Filter>
++    </ClInclude>
+   </ItemGroup>
+   <ItemGroup>
+     <ClCompile Include="Checkers.cpp">
+@@ -110,6 +113,9 @@
+     <ClCompile Include="CMatchWnd.cpp">
+       <Filter>Source Files</Filter>
+     </ClCompile>
++    <ClCompile Include="HeuristicTree.cpp">
++      <Filter>Source Files</Filter>
++    </ClCompile>
+   </ItemGroup>
+   <ItemGroup>
+     <None Include="Checkers.reg" />
+diff --git a/HeuristicTree.cpp b/HeuristicTree.cpp
+new file mode 100644
+index 0000000..c82a1a4
+--- /dev/null
++++ b/HeuristicTree.cpp
+@@ -0,0 +1,49 @@
++#include "pch.h"
++#include "HeuristicTree.h"
++
++using namespace game;
++
++namespace heur
++{
++	Tree::Tree(Limits limits, unsigned seed)
++		:m_Limits{ limits }
++		, m_Rng{ seed }
++		, m_Root{ Color::Black }
++	{}
++
++	void Tree::Reset(Checkers const& root)
++	{
++		m_Root = root;
++		m_nNodes = 0;
++		//	TODO: forget the old tree
++	}
++
++	void Tree::Advance(Move const& m)
++	{
++		//	the game moved on by m: step the real position the way MCTS::advance_root does, one jump at a time
++		for (auto const& j : m)
++			m_Root.Do(j);
++		//	TODO: keep the branch that was played (if it is worth keeping) or rebuild
++	}
++
++	Move Tree::Choose()
++	{
++		//	TODO: the tree. This placeholder plays like the old random opponent, so everything runs until it is replaced.
++		auto const moves{ m_Root.GetAvailableMoves() };
++		m_nNodes = moves.size();
++		return moves[std::uniform_int_distribution<size_t>{ 0, moves.size() - 1 }(m_Rng)];
++	}
++
++	int Tree::Material(id::zip64 const& board, Color who)
++	{
++		constexpr int man{ 100 }, king{ 300 };
++		int sum{};
++		for (size_t i = 0; i < 64; ++i)
++			if (id::zip64::is_dark_square(i) && board.has(i))
++			{
++				int const v{ board.is_queen(i) ? king : man };
++				sum += board.is_white(i) == (who == Color::White) ? v : -v;
++			}
++		return sum;
++	}
++}
+diff --git a/HeuristicTree.h b/HeuristicTree.h
+new file mode 100644
+index 0000000..c4ddb01
+--- /dev/null
++++ b/HeuristicTree.h
+@@ -0,0 +1,54 @@
++#pragma once
++#include <random>
++#include "defines.h"
++
++//	heur::Tree
++//
++//	The match opponent that has no net: it looks a few plies ahead, scores positions by material and picks at random among the best moves.
++//	It is a black box for CMatchThread::PlayGame, which only does this:
++//
++//		heur::Tree t{ limits, seed };
++//		t.Reset(start_position);			//	once per game: the position after the first Do(Move{}), White to move
++//		t.Advance(m);						//	after EVERY ply of the game, whoever made it (the opponent's own moves too)
++//		m = t.Choose();						//	when the opponent is to move and has at least two legal moves
++//
++//	What is inside is up to the implementation: how the nodes are stored, depth-first or breadth-first, whether the branch is kept after Advance()
++//	or rebuilt. The tree has nothing to do with mcts::MCTS.
++//
++//	Things the engine does that are easy to trip over:
++//	  - A ply is one JUMP, not one turn: Do(Jump) switches the player only when the capture chain ends (see Checkers::Do(Jump) and MCTS::advance_root).
++//		So a double capture is two plies of the same side, and "who moves" must be read from WhoMakesTurn() at every node: no blind sign flip.
++//	  - GetAvailableMoves() returns the continuation moves when a chain is pending, and an empty vector when the side to move is stuck (a loss).
++//	  - Choose() must return one of Root().GetAvailableMoves(); PlayGame ASSERTs it in debug.
++//	  - The caller does the end-of-game rules (repeats, no progress, king vs king, ply cap); the tree only has to find a good move.
++
++namespace heur
++{
++	struct Limits
++	{
++		int depth;			//	plies ahead, counted in jumps
++		size_t nodes;		//	budget of positions per Choose(); 0 = only the depth limit
++	};
++
++	class Tree
++	{
++	public:
++		Tree(Limits limits, unsigned seed);
++
++		void Reset(game::Checkers const& root);
++		void Advance(game::Move const& m);
++		game::Move Choose();
++
++		game::Checkers const& Root()const { return m_Root; }
++		size_t Nodes()const { return m_nNodes; }		//	positions looked at by the last Choose(), for the Match window later
++
++		//	material of `who` minus material of the other side: a man is worth `man`, a king `king` (kings are worth far more)
++		static int Material(id::zip64 const& board, game::Color who);
++
++	private:
++		Limits m_Limits;
++		std::mt19937 m_Rng;
++		game::Checkers m_Root;		//	the real game, always
++		size_t m_nNodes{};
++	};
++}

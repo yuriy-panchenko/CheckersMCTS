@@ -134,7 +134,7 @@ void CCheckersDoc::OnMatchFinished(MatchResult const& r)
 	if (r.hadChampion)
 		champ.Format(_T("vs champion (since game %zu) +%d =%d -%d: %.3f | "), r.championGame, r.vsChampion.w, r.vsChampion.d, r.vsChampion.l, r.vsChampion.value());
 	str.Format(_T("MATCH @%zu: %svs random +%d =%d -%d: %.3f%s"), r.trainGames, (LPCTSTR)champ,
-		r.vsRandom.w, r.vsRandom.d, r.vsRandom.l, r.vsRandom.value(), r.promoted ? _T(" | NEW CHAMPION") : _T(""));
+		r.vsRandom.w, r.vsRandom.d, r.vsRandom.l, r.vsRandom.value(), r.promoted ? _T(" | NEW CHAMPION") : r.exhibition ? _T(" | exhibition, not recorded") : _T(""));
 	out.AddDebugString(str);
 	out.AddMatchData(r);
 }

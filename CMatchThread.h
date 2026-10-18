@@ -7,11 +7,13 @@
 #include "mcts.h"
 
 #define MATCH_CHAMP_GAMES	(70)	//	games against the champion, colours alternate
+#define MATCH_HEUR_DEPTH	(4)		//	the no-net opponent (heur::Tree): plies (jumps) it looks ahead
+#define MATCH_HEUR_NODES	(20000u)	//	and its budget of positions per move, 0 = depth only
 #define MATCH_RANDOM_GAMES	(10)	//	games against a random mover: a sanity check (real nets win them all), so few
 									//	a match has to finish before the next training batch (MATCH_EVERY games): a vs-random game costs about half a vs-champion one,
 									//	because only the challenger searches
 #define MATCH_PROMOTE		(.60)	//	score needed to become / replace the champion
-#define MATCH_RANDOM_PLIES	(4u)		//	opening plies played at random, otherwise two deterministic nets replay one game
+#define MATCH_RANDOM_PLIES	(2u)		//	opening plies played at random, otherwise two deterministic nets replay one game
 #define MATCH_MAX_PLIES		(400u)	//	safety net: a game that long is a draw
 #ifdef _DEBUG
 #define MATCH_SIMS			(50u)
@@ -30,9 +32,10 @@ constexpr UINT WM_MATCH_LIVE{ WM_APP + 0x0014 };		//	LPARAM = new MatchLive*, th
 //	a frozen copy of the net being tested; the match thread is its only user
 struct MatchJob
 {
-	MatchJob(size_t g, NNet const& n) :trainGames{ g }, net{ n } {}
+	MatchJob(size_t g, NNet const& n, bool demo = false) :trainGames{ g }, net{ n }, exhibition{ demo } {}
 	size_t trainGames;		//	games.csv game count when the copy was taken
 	NNet net;
+	bool exhibition;		//	just for the show (the untrained net on the very first start): plays random only, never promoted, nothing is recorded
 };
 
 //	score of the challenger: wins + half the draws, over all games
@@ -72,6 +75,7 @@ struct MatchResult
 	MatchScore vsChampion;		//	empty if there was no champion yet
 	MatchScore vsRandom;		//	the fixed anchor
 	bool promoted{};
+	bool exhibition{};			//	not a checkpoint: shown in the Match tab only
 };
 
 // CMatchThread

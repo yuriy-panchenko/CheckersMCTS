@@ -54,6 +54,7 @@ BOOL CLearningThread::InitInstance()
 	m_Net.init();
 
 	std::ifstream s{ NNET_FILENAME, std::ios::binary };
+	bool const hadNet{ static_cast<bool>(s) };
 	if (s)
 		try { s >> m_Net; }
 	catch (const std::exception& e)
@@ -67,6 +68,11 @@ BOOL CLearningThread::InitInstance()
 	{
 		m_pMatchTh->SetNotifyWnd(m_hNotify.load());
 		m_pMatchTh->ResumeThread();
+
+		//	the very first start (no net, no games): the untrained net plays the random mover once, just for the show.
+		//	Not a checkpoint: game 0, never promoted, nothing recorded. If it is still running when game 100 arrives, that checkpoint is skipped.
+		if (!hadNet && m_Stats.games() == 0)
+			m_pMatchTh->Submit(std::make_unique<MatchJob>(0, m_Net, true));
 	}
 
 	PostThreadMessage(WM_NEW_GAME, 0, 0);

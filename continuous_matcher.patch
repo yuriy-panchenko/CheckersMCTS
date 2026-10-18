@@ -1,0 +1,66 @@
+diff --git a/CLearningThread.cpp b/CLearningThread.cpp
+index 486f798..efd3552 100644
+--- a/CLearningThread.cpp
++++ b/CLearningThread.cpp
+@@ -19,7 +19,6 @@ using namespace mcts;
+ #define VALUE_MIX_START	(.3)
+ #define VALUE_MIX_GAMES	(1500.)
+ #define MATERIAL_SCALE	(4.)
+-#define MATCH_EVERY	(100)	//	training games between background matches (see CMatchThread.cpp)
+ #define NNET_FILENAME	_T("net.bin")
+ #define STATS_FILENAME	_T("games.csv")
+ 
+@@ -62,7 +61,7 @@ BOOL CLearningThread::InitInstance()
+ 	}
+ 
+ 	//	background matches: low priority, same notify window as ours
+-	m_pMatchTh = static_cast<CMatchThread*>(::AfxBeginThread(RUNTIME_CLASS(CMatchThread), 0, 0, CREATE_SUSPENDED));
++	m_pMatchTh = static_cast<CMatchThread*>(::AfxBeginThread(RUNTIME_CLASS(CMatchThread), THREAD_PRIORITY_BELOW_NORMAL, 0, CREATE_SUSPENDED));
+ 	if (m_pMatchTh)
+ 	{
+ 		m_pMatchTh->SetNotifyWnd(m_hNotify.load());
+@@ -245,8 +244,9 @@ void CLearningThread::EndGame(std::optional<Color> winner, GameStats::Reason why
+ 		::MessageBox(NULL, CA2W{ e.what() }, _T("Error saving nnet!"), MB_OK | MB_ICONERROR);
+ 	}
+ 
+-	//	a frozen copy of the net goes to the match thread; if the previous match is still running this checkpoint is skipped
+-	if (m_pMatchTh && m_Stats.games() % MATCH_EVERY == 0)
++	//	the match thread plays all the time: when it is free it gets a frozen copy of the net as it is now, whatever the game count.
++	//	The copy is made here, between two games: the only moment the net is not being changed.
++	if (m_pMatchTh && m_pMatchTh->IsIdle())
+ 		m_pMatchTh->Submit(std::make_unique<MatchJob>(m_Stats.games(), m_Net));
+ 
+ 	m_bOver = true;
+diff --git a/CMatchThread.h b/CMatchThread.h
+index 5c2bd15..740e41f 100644
+--- a/CMatchThread.h
++++ b/CMatchThread.h
+@@ -6,10 +6,9 @@
+ #include "defines.h"
+ #include "mcts.h"
+ 
+-#define MATCH_CHAMP_GAMES	(70)	//	games against the champion, colours alternate
++#define MATCH_CHAMP_GAMES	(100)	//	games against the champion, colours alternate
+ #define MATCH_RANDOM_GAMES	(10)	//	games against a random mover: a sanity check (real nets win them all), so few
+-									//	a match has to finish before the next training batch (MATCH_EVERY games): a vs-random game costs about half a vs-champion one,
+-									//	because only the challenger searches
++									//	a match has no deadline: the thread plays all the time and takes a fresh net whenever it is free
+ #define MATCH_PROMOTE		(.60)	//	score needed to become / replace the champion
+ #define MATCH_RANDOM_PLIES	(4u)		//	opening plies played at random, otherwise two deterministic nets replay one game
+ #define MATCH_MAX_PLIES		(400u)	//	safety net: a game that long is a draw
+@@ -77,6 +76,7 @@ struct MatchResult
+ // CMatchThread
+ //
+ //	Plays challenger-vs-champion and challenger-vs-random matches in the background so the training thread never waits.
++//	It plays all the time: whenever it is idle, the training thread hands it the net as it is at the end of the next training game.
+ //	Champion rule: with no champion, a challenger that scores >= MATCH_PROMOTE against random becomes the champion;
+ //	afterwards a challenger that scores >= MATCH_PROMOTE against the champion replaces it.
+ //	Every champion is kept as champion_<training game>.bin; the highest number is the current one (an old unnumbered champion.bin loads as game 0).
+@@ -95,6 +95,7 @@ public:
+ 
+ 	void SetNotifyWnd(HWND h) { m_hNotify = h; }		//	set before ResumeThread(), or nullptr to stop notifications
+ 	void RequestStop() { m_bStop = true; }				//	any thread; the running match ends at its next ply
++	bool IsIdle()const { return !m_bBusy; }				//	any thread: no match is running, so Submit() will take a job
+ 	bool Submit(std::unique_ptr<MatchJob> job);			//	any thread; false (job untouched) if a match is still running or the queue is not ready
+ 
+ protected:

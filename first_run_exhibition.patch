@@ -1,0 +1,199 @@
+diff --git a/CLearningThread.cpp b/CLearningThread.cpp
+index 486f798..c14be5c 100644
+--- a/CLearningThread.cpp
++++ b/CLearningThread.cpp
+@@ -54,6 +54,7 @@ BOOL CLearningThread::InitInstance()
+ 	m_Net.init();
+ 
+ 	std::ifstream s{ NNET_FILENAME, std::ios::binary };
++	bool const hadNet{ static_cast<bool>(s) };
+ 	if (s)
+ 		try { s >> m_Net; }
+ 	catch (const std::exception& e)
+@@ -67,6 +68,11 @@ BOOL CLearningThread::InitInstance()
+ 	{
+ 		m_pMatchTh->SetNotifyWnd(m_hNotify.load());
+ 		m_pMatchTh->ResumeThread();
++
++		//	the very first start (no net, no games): the untrained net plays the random mover once, just for the show.
++		//	Not a checkpoint: game 0, never promoted, nothing recorded. If it is still running when game 100 arrives, that checkpoint is skipped.
++		if (!hadNet && m_Stats.games() == 0)
++			m_pMatchTh->Submit(std::make_unique<MatchJob>(0, m_Net, true));
+ 	}
+ 
+ 	PostThreadMessage(WM_NEW_GAME, 0, 0);
+diff --git a/CMatchThread.cpp b/CMatchThread.cpp
+index c094abe..13c4db8 100644
+--- a/CMatchThread.cpp
++++ b/CMatchThread.cpp
+@@ -111,7 +111,8 @@ void CMatchThread::OnRunMatch(WPARAM, LPARAM lp)
+ 
+ 	auto res{ std::make_unique<MatchResult>() };
+ 	res->trainGames = job->trainGames;
+-	res->hadChampion = (bool)m_pChampion;
++	res->exhibition = job->exhibition;
++	res->hadChampion = m_pChampion && !job->exhibition;		//	an exhibition plays random only
+ 	res->championGame = m_uChampionGame;
+ 
+ 	m_Live = MatchLive{};
+@@ -120,7 +121,7 @@ void CMatchThread::OnRunMatch(WPARAM, LPARAM lp)
+ 	m_tStart = ::GetTickCount64();
+ 	m_tLastPost = 0;
+ 
+-	if (m_pChampion)
++	if (res->hadChampion)
+ 	{
+ 		m_Live.phase = MatchPhase::VsChampion;
+ 		res->vsChampion = PlayMatch(job->net, m_pChampion.get());
+@@ -134,14 +135,15 @@ void CMatchThread::OnRunMatch(WPARAM, LPARAM lp)
+ 		return;
+ 	}
+ 
+-	res->promoted = (res->hadChampion ? res->vsChampion : res->vsRandom).value() >= MATCH_PROMOTE;
++	res->promoted = !job->exhibition && (res->hadChampion ? res->vsChampion : res->vsRandom).value() >= MATCH_PROMOTE;
+ 	if (res->promoted)
+ 	{
+ 		m_pChampion = std::make_unique<NNet>(job->net);
+ 		m_uChampionGame = job->trainGames;
+ 		SaveChampion();
+ 	}
+-	AppendCsv(*res);
++	if (!job->exhibition)
++		AppendCsv(*res);
+ 
+ 	m_bBusy = false;
+ 	if (auto const h{ m_hNotify.load() })
+diff --git a/CMatchThread.h b/CMatchThread.h
+index 5c2bd15..33c7924 100644
+--- a/CMatchThread.h
++++ b/CMatchThread.h
+@@ -30,9 +30,10 @@ constexpr UINT WM_MATCH_LIVE{ WM_APP + 0x0014 };		//	LPARAM = new MatchLive*, th
+ //	a frozen copy of the net being tested; the match thread is its only user
+ struct MatchJob
+ {
+-	MatchJob(size_t g, NNet const& n) :trainGames{ g }, net{ n } {}
++	MatchJob(size_t g, NNet const& n, bool demo = false) :trainGames{ g }, net{ n }, exhibition{ demo } {}
+ 	size_t trainGames;		//	games.csv game count when the copy was taken
+ 	NNet net;
++	bool exhibition;		//	just for the show (the untrained net on the very first start): plays random only, never promoted, nothing is recorded
+ };
+ 
+ //	score of the challenger: wins + half the draws, over all games
+@@ -72,6 +73,7 @@ struct MatchResult
+ 	MatchScore vsChampion;		//	empty if there was no champion yet
+ 	MatchScore vsRandom;		//	the fixed anchor
+ 	bool promoted{};
++	bool exhibition{};			//	not a checkpoint: shown in the Match tab only
+ };
+ 
+ // CMatchThread
+diff --git a/CMatchWnd.cpp b/CMatchWnd.cpp
+index 1e3384a..0b66dd6 100644
+--- a/CMatchWnd.cpp
++++ b/CMatchWnd.cpp
+@@ -45,6 +45,7 @@ IMPLEMENT_DYNAMIC(CMatchWnd, CWnd)
+ CMatchWnd::CMatchWnd()
+ 	:m_Result{}
+ 	, m_bCompleted{ FALSE }
++	, m_bStarted{ FALSE }
+ {}
+ 
+ CMatchWnd::~CMatchWnd()
+@@ -64,9 +65,11 @@ void CMatchWnd::SetScore(BOOL vsNet, MatchScore const& score)
+ 
+ void CMatchWnd::Reset(size_t id)
+ {
++	m_bStarted = TRUE;
+ 	m_bCompleted = FALSE;
+ 	m_Result.vsChampion = m_Result.vsRandom = {};
+ 	m_Result.promoted = false;
++	m_Result.exhibition = false;
+ 	m_Result.trainGames = id;
+ 	m_Live = MatchLive{};
+ 	Refresh();
+@@ -198,7 +201,7 @@ void CMatchWnd::Draw(CDC& dc, CRect const& rc)
+ 
+ 	////////////////////////////////////////////////////////////////////////////////////// what is going on
+ 	MatchLive const& L{ m_Live };
+-	bool const started{ m_Result.trainGames != 0 };
++	bool const started{ m_bStarted != FALSE };
+ 	bool const running{ started && !m_bCompleted };
+ 	bool const hadChamp{ m_bCompleted ? m_Result.hadChampion : L.hadChampion };
+ 	size_t const champGame{ m_bCompleted ? m_Result.championGame : L.championGame };
+@@ -250,7 +253,10 @@ void CMatchWnd::Draw(CDC& dc, CRect const& rc)
+ 				champ.Format(_T("net @ game %zu"), champGame);
+ 			else
+ 				champ = _T("loaded from disk");
+-			s.Format(_T("Testing net @ game %zu  \u00B7  champion: %s"), m_Result.trainGames, (LPCTSTR)champ);
++			if (m_Result.trainGames == 0)
++				s = _T("Testing the untrained net  \u00B7  exhibition: not counted, nothing is saved");
++			else
++				s.Format(_T("Testing net @ game %zu  \u00B7  champion: %s"), m_Result.trainGames, (LPCTSTR)champ);
+ 			text(m_fSmall, kMuted, s, M + 2, M + 32);
+ 		}
+ 	}
+@@ -318,7 +324,12 @@ void CMatchWnd::Draw(CDC& dc, CRect const& rc)
+ 
+ 		CString title{ _T("RESULT") };
+ 		if (started)
+-			title.AppendFormat(_T("  \u00B7  NET @ GAME %zu"), m_Result.trainGames);
++		{
++			if (m_Result.trainGames == 0)
++				title.Append(_T("  \u00B7  UNTRAINED NET"));
++			else
++				title.AppendFormat(_T("  \u00B7  NET @ GAME %zu"), m_Result.trainGames);
++		}
+ 		card(rResult, title);
+ 
+ 		auto const row = [&](int y, CString const& label, MatchScore const& s, int games, bool active, bool available)
+@@ -365,7 +376,7 @@ void CMatchWnd::Draw(CDC& dc, CRect const& rc)
+ 		COLORREF fc{ kMuted };
+ 		if (m_bCompleted)
+ 		{
+-			foot = m_Result.promoted ? _T("\u2605  PROMOTED: new champion") : _T("not promoted");
++			foot = m_Result.exhibition ? _T("exhibition match: not counted") : m_Result.promoted ? _T("\u2605  PROMOTED: new champion") : _T("not promoted");
+ 			fc = m_Result.promoted ? kAccent : kMuted;
+ 		}
+ 		else
+diff --git a/CMatchWnd.h b/CMatchWnd.h
+index b3fcb49..7d9c82a 100644
+--- a/CMatchWnd.h
++++ b/CMatchWnd.h
+@@ -32,6 +32,7 @@ private:
+ private:
+ 	MatchResult m_Result;
+ 	BOOL m_bCompleted;
++	BOOL m_bStarted;		//	a match has been announced (trainGames can be 0 for the exhibition, so it cannot tell)
+ 	MatchLive m_Live;
+ 	CFont m_fBig, m_fHead, m_fSmall, m_fTitle;
+ };
+diff --git a/CheckersDoc.cpp b/CheckersDoc.cpp
+index a981938..35c157a 100644
+--- a/CheckersDoc.cpp
++++ b/CheckersDoc.cpp
+@@ -134,7 +134,7 @@ void CCheckersDoc::OnMatchFinished(MatchResult const& r)
+ 	if (r.hadChampion)
+ 		champ.Format(_T("vs champion (since game %zu) +%d =%d -%d: %.3f | "), r.championGame, r.vsChampion.w, r.vsChampion.d, r.vsChampion.l, r.vsChampion.value());
+ 	str.Format(_T("MATCH @%zu: %svs random +%d =%d -%d: %.3f%s"), r.trainGames, (LPCTSTR)champ,
+-		r.vsRandom.w, r.vsRandom.d, r.vsRandom.l, r.vsRandom.value(), r.promoted ? _T(" | NEW CHAMPION") : _T(""));
++		r.vsRandom.w, r.vsRandom.d, r.vsRandom.l, r.vsRandom.value(), r.promoted ? _T(" | NEW CHAMPION") : r.exhibition ? _T(" | exhibition, not recorded") : _T(""));
+ 	out.AddDebugString(str);
+ 	out.AddMatchData(r);
+ }
+diff --git a/OutputWnd.cpp b/OutputWnd.cpp
+index 04f454f..7ff2f38 100644
+--- a/OutputWnd.cpp
++++ b/OutputWnd.cpp
+@@ -208,6 +208,12 @@ void COutputWnd::AddChartData(double db)
+ 
+ void COutputWnd::AddMatchData(MatchResult const& r)
+ {
++	if (r.exhibition)		//	the untrained-net show: Match tab only; the charts add points by position and are saved to disk
++	{
++		m_wndMatch.SetResult(r);
++		return;
++	}
++
+ 	double vsChampion = r.hadChampion ? r.vsChampion.value() : std::numeric_limits<double>::quiet_NaN();
+ 	double vsRandom = r.vsRandom.value();
+ 	if (!std::isnan(vsChampion))
