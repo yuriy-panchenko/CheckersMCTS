@@ -404,8 +404,10 @@ void CMatchWnd::Draw(CDC& dc, CRect const& rc)
 				y += 18;
 				if (!available)
 					return;
-				int const perRow{ (games + 1) / 2 }, gap{ 2 };
-				int const cell{ max(4, min(14, (right - x - (perRow - 1) * gap) / perRow)) };
+				int const gap{ 2 };
+				int const perRow{ max(10, (games + 4) / 5) };		//	up to 5 rows, at least 10 cells per row
+				int const cell{ max(4, min(10, (right - x - (perRow - 1) * gap) / perRow)) };		//	10 px, smaller only if the card is too narrow
+				int const rows{ (games + perRow - 1) / perRow };
 				for (int i = 0; i < games; ++i)
 				{
 					CRect c{ x + (i % perRow) * (cell + gap), y + (i / perRow) * (cell + gap), 0, 0 };
@@ -415,7 +417,7 @@ void CMatchWnd::Draw(CDC& dc, CRect const& rc)
 					if (i == activeIndex)
 						outline(CRect{ c.left - 1, c.top - 1, c.right + 1, c.bottom + 1 }, kAccent, 1);
 				}
-				y += 2 * (cell + gap) + 8;
+				y += rows * (cell + gap) + 8;
 			};
 
 		bool const champActive{ running && L.phase == MatchPhase::VsChampion }, randActive{ running && L.phase == MatchPhase::VsRandom };
