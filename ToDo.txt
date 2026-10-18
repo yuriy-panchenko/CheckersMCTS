@@ -1,3 +1,5 @@
-Save match best network results along with weights. load upon initialising.
-Remove 'Score' table and display 'Result' only.
-Display 2 results, current and best
+-Restructure file layout. Move champion .bin files to new inside folder data/champ/.
+-Consider to increase number of games to play in match / number of moves to explorer to give more time to learn (not 60-80 games like nowbut more).
+-Consider changing levelfrom 60 to say 65-70 to filter 'false' champions.
+-Keep small score list of previous matches (2-3 games) as as soon as match is done I could not see the results as they being overwritten.
+-Check my own heuristic::Tree for personal ideas of how to search for moves.
