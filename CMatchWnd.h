@@ -1,4 +1,5 @@
 #pragma once
+#include <deque>
 #include "CMatchThread.h"
 
 // CMatchWnd
@@ -33,5 +34,6 @@ private:
 	MatchResult m_Result;
 	BOOL m_bCompleted;
 	MatchLive m_Live;
+	std::deque<MatchResult> m_History;	//	finished matches, newest first (the card shows the running or last one big and the few before it small)
 	CFont m_fBig, m_fHead, m_fSmall, m_fTitle;
 };

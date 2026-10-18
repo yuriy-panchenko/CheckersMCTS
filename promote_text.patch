@@ -1,0 +1,42 @@
+diff --git a/CMatchWnd.cpp b/CMatchWnd.cpp
+index 0c85345..5f372d9 100644
+--- a/CMatchWnd.cpp
++++ b/CMatchWnd.cpp
+@@ -22,6 +22,17 @@ namespace
+ 		return c;
+ 	}
+ 
++	//	the promotion bar as text, not rounded to a whole number: "60%" or "62.5%"
++	CString PromoteText()
++	{
++		CString c;
++		c.Format(_T("%.1f"), MATCH_PROMOTE * 100.);
++		if (c.Right(2) == _T(".0"))
++			c = c.Left(c.GetLength() - 2);
++		c.Append(_T("%"));
++		return c;
++	}
++
+ 	CString Clock(ULONGLONG ms)
+ 	{
+ 		ULONGLONG const sec{ ms / 1000 };
+@@ -234,8 +245,8 @@ void CMatchWnd::Draw(CDC& dc, CRect const& rc)
+ 		text(m_fHead, kText, status, pill.left + 30, pill.top + 3);
+ 
+ 		CString s;
+-		s.Format(_T("%d + %d games (champion + random)  \u00B7  %u sims  \u00B7  promote at %.0f%%  \u00B7  %u random plies  \u00B7  %u ply cap"),
+-			MATCH_CHAMP_GAMES, MATCH_RANDOM_GAMES, MATCH_SIMS, MATCH_PROMOTE * 100., MATCH_RANDOM_PLIES, MATCH_MAX_PLIES);
++		s.Format(_T("%d + %d games (champion + random)  \u00B7  %u sims  \u00B7  promote at %s  \u00B7  %u random plies  \u00B7  %u ply cap"),
++			MATCH_CHAMP_GAMES, MATCH_RANDOM_GAMES, MATCH_SIMS, (LPCTSTR)PromoteText(), MATCH_RANDOM_PLIES, MATCH_MAX_PLIES);
+ #ifdef _DEBUG
+ 		s.Append(_T("  (Debug)"));
+ #endif
+@@ -369,7 +380,7 @@ void CMatchWnd::Draw(CDC& dc, CRect const& rc)
+ 			fc = m_Result.promoted ? kAccent : kMuted;
+ 		}
+ 		else
+-			foot.Format(_T("bar = wins + \u00BD draws; marker = promotion at %.0f%%"), MATCH_PROMOTE * 100.);
++			foot.Format(_T("bar = wins + \u00BD draws; marker = promotion at %s"), (LPCTSTR)PromoteText());
+ 		text(m_fSmall, fc, foot, rResult.left + 14, y);
+ 
+ 		dc.RestoreDC(save);

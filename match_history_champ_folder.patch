@@ -1,0 +1,169 @@
+diff --git a/CMatchThread.cpp b/CMatchThread.cpp
+index ba38339..66f37e8 100644
+--- a/CMatchThread.cpp
++++ b/CMatchThread.cpp
+@@ -10,6 +10,7 @@ using namespace game;
+ using namespace mcts;
+ 
+ #define CHAMPION_LEGACY_FILENAME	_T("champion.bin")	//	before the game number moved into the file name
++#define CHAMPION_FOLDER				L"champ"				//	champion_<game>.bin lives in data/champ/ (older ones may still sit in data/)
+ #define CHAMPION_PREFIX				L"champion_"			//	champion_<training game>.bin
+ #define CHAMPION_EXT				L".bin"
+ #define MATCHES_FILENAME	_T("matches.csv")
+@@ -18,10 +19,10 @@ namespace
+ {
+ 	std::filesystem::path ChampionPath(size_t game)
+ 	{
+-		return std::filesystem::path{ std::wstring{ CHAMPION_PREFIX } + std::to_wstring(game) + CHAMPION_EXT };
++		return std::filesystem::path{ CHAMPION_FOLDER } / (std::wstring{ CHAMPION_PREFIX } + std::to_wstring(game) + CHAMPION_EXT);
+ 	}
+ 
+-	//	the champion_<game>.bin with the highest game number in the working directory; empty path if there is none
++	//	the champion_<game>.bin with the highest game number in champ/ or, for files not moved yet, in the working directory; empty path if there is none
+ 	std::filesystem::path FindChampion(size_t& game)
+ 	{
+ 		namespace fs = std::filesystem;
+@@ -29,22 +30,26 @@ namespace
+ 		fs::path best;
+ 		game = 0;
+ 		std::error_code ec;
+-		for (fs::directory_iterator it{ fs::path{ L"." }, ec }, end; !ec && it != end; it.increment(ec))
++		for (wchar_t const* dir : { CHAMPION_FOLDER, L"." })		//	a tie goes to champ/
+ 		{
+-			fs::path const& p{ it->path() };
+-			if (p.extension() != CHAMPION_EXT)
+-				continue;
+-			std::wstring const stem{ p.stem().wstring() };
+-			if (stem.size() <= prefix.size() || stem.compare(0, prefix.size(), prefix) != 0)
+-				continue;
+-			std::wstring const digits{ stem.substr(prefix.size()) };
+-			if (digits.size() > 18 || digits.find_first_not_of(L"0123456789") != std::wstring::npos)
+-				continue;
+-			size_t const n{ static_cast<size_t>(std::stoull(digits)) };
+-			if (best.empty() || n > game)
++			ec.clear();
++			for (fs::directory_iterator it{ fs::path{ dir }, ec }, end; !ec && it != end; it.increment(ec))
+ 			{
+-				best = p;
+-				game = n;
++				fs::path const& p{ it->path() };
++				if (p.extension() != CHAMPION_EXT)
++					continue;
++				std::wstring const stem{ p.stem().wstring() };
++				if (stem.size() <= prefix.size() || stem.compare(0, prefix.size(), prefix) != 0)
++					continue;
++				std::wstring const digits{ stem.substr(prefix.size()) };
++				if (digits.size() > 18 || digits.find_first_not_of(L"0123456789") != std::wstring::npos)
++					continue;
++				size_t const n{ static_cast<size_t>(std::stoull(digits)) };
++				if (best.empty() || n > game)
++				{
++					best = p;
++					game = n;
++				}
+ 			}
+ 		}
+ 		return best;
+@@ -282,6 +287,8 @@ void CMatchThread::SaveChampion()const
+ {
+ 	namespace fs = std::filesystem;
+ 	fs::path const target{ ChampionPath(m_uChampionGame) };
++	std::error_code ec;
++	fs::create_directories(target.parent_path(), ec);
+ 	fs::path tmp{ target };
+ 	tmp.replace_extension(L".tmp");		//	never matches champion_<n>.bin: a half-written file cannot become "the latest champion"
+ 
+@@ -297,7 +304,7 @@ void CMatchThread::SaveChampion()const
+ 			catch (const std::exception&) {}
+ 	}		//	closed (flushed) before the rename
+ 
+-	std::error_code ec;
++	ec.clear();
+ 	if (ok)
+ 		fs::rename(tmp, target, ec);		//	replaces an existing file on Windows
+ 	if (!ok || ec)
+diff --git a/CMatchWnd.cpp b/CMatchWnd.cpp
+index 0c85345..f3f8382 100644
+--- a/CMatchWnd.cpp
++++ b/CMatchWnd.cpp
+@@ -75,6 +75,9 @@ void CMatchWnd::Reset(size_t id)
+ void CMatchWnd::SetResult(MatchResult const& result)
+ {
+ 	m_Result = result;
++	m_History.push_front(result);
++	if (m_History.size() > 8)
++		m_History.pop_back();
+ 	m_bCompleted = TRUE;
+ 	m_Live.phase = MatchPhase::Idle;
+ 	Refresh();
+@@ -372,6 +375,30 @@ void CMatchWnd::Draw(CDC& dc, CRect const& rc)
+ 			foot.Format(_T("bar = wins + \u00BD draws; marker = promotion at %.0f%%"), MATCH_PROMOTE * 100.);
+ 		text(m_fSmall, fc, foot, rResult.left + 14, y);
+ 
++		//	the last finished matches: the next match starts as soon as one ends and clears the card above
++		size_t const skip{ m_bCompleted ? 1u : 0u };		//	a finished match is already shown above
++		if (m_History.size() > skip)
++		{
++			int const x0{ rResult.left + 14 }, xChamp{ x0 + 80 }, xRand{ x0 + 170 }, xStar{ x0 + 262 };
++			y += 26;
++			text(m_fTitle, kMuted, _T("PREVIOUS"), x0, y);
++			text(m_fTitle, kMuted, _T("VS CHAMPION"), xChamp, y);
++			text(m_fTitle, kMuted, _T("VS RANDOM"), xRand, y);
++			y += 18;
++			auto const pctColor = [](MatchScore const& s) { return !s.games() ? kMuted : s.value() >= MATCH_PROMOTE ? kWin : s.value() < .5 ? kLoss : kText; };
++			for (size_t k = skip; k < m_History.size() && k < skip + 3 && y + 16 <= rResult.bottom - 6; ++k, y += 18)
++			{
++				MatchResult const& h{ m_History[k] };
++				CString net;
++				net.Format(_T("net %zu"), h.trainGames);
++				text(m_fSmall, kMuted, net, x0, y);
++				text(m_fSmall, h.hadChampion ? pctColor(h.vsChampion) : kMuted, h.hadChampion ? Pct(h.vsChampion) : CString{ _T("--") }, xChamp, y);
++				text(m_fSmall, pctColor(h.vsRandom), Pct(h.vsRandom), xRand, y);
++				if (h.promoted)
++					text(m_fSmall, kAccent, _T("\u2605"), xStar, y);
++			}
++		}
++
+ 		dc.RestoreDC(save);
+ 	}
+ 
+@@ -398,15 +425,19 @@ void CMatchWnd::Draw(CDC& dc, CRect const& rc)
+ 			fill(CRect{ bar.left, bar.top, bar.left + bar.Width() * done / total, bar.bottom }, kAccent);
+ 		y += 20;
+ 
++		//	one cell size for every strip, taken from the widest one: 10 px, smaller only if the card is too narrow
++		int const gap{ 2 };
++		auto const perRowOf{ [](int games) { return max(10, (games + 4) / 5); } };		//	up to 5 rows, at least 10 cells per row
++		int const widest{ perRowOf(max(MATCH_CHAMP_GAMES, MATCH_RANDOM_GAMES)) };
++		int const cell{ max(4, min(10, (right - x - (widest - 1) * gap) / widest)) };
++
+ 		auto const strip = [&](CString const& label, std::vector<signed char> const& v, int games, int activeIndex, bool available)
+ 			{
+ 				text(m_fSmall, kMuted, label, x, y);
+ 				y += 18;
+ 				if (!available)
+ 					return;
+-				int const gap{ 2 };
+-				int const perRow{ max(10, (games + 4) / 5) };		//	up to 5 rows, at least 10 cells per row
+-				int const cell{ max(4, min(10, (right - x - (perRow - 1) * gap) / perRow)) };		//	10 px, smaller only if the card is too narrow
++				int const perRow{ perRowOf(games) };
+ 				int const rows{ (games + perRow - 1) / perRow };
+ 				for (int i = 0; i < games; ++i)
+ 				{
+diff --git a/CMatchWnd.h b/CMatchWnd.h
+index b3fcb49..ac2e25b 100644
+--- a/CMatchWnd.h
++++ b/CMatchWnd.h
+@@ -1,4 +1,5 @@
+ #pragma once
++#include <deque>
+ #include "CMatchThread.h"
+ 
+ // CMatchWnd
+@@ -33,5 +34,6 @@ private:
+ 	MatchResult m_Result;
+ 	BOOL m_bCompleted;
+ 	MatchLive m_Live;
++	std::deque<MatchResult> m_History;	//	finished matches, newest first (the card shows the running or last one big and the few before it small)
+ 	CFont m_fBig, m_fHead, m_fSmall, m_fTitle;
+ };

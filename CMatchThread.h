@@ -6,12 +6,12 @@
 #include "defines.h"
 #include "mcts.h"
 
-#define MATCH_CHAMP_GAMES	(100)	//	games against the champion, colours alternate
+#define MATCH_CHAMP_GAMES	(150)	//	games against the champion, colours alternate
 #define MATCH_HEUR_DEPTH	(4)		//	the no-net opponent (heur::Tree): plies (jumps) it looks ahead
 #define MATCH_HEUR_NODES	(20000u)	//	and its budget of positions per move, 0 = depth only
 #define MATCH_RANDOM_GAMES	(10)	//	games against a random mover: a sanity check (real nets win them all), so few
 									//	a match has no deadline: the thread plays all the time and takes a fresh net whenever it is free
-#define MATCH_PROMOTE		(.60)	//	score needed to become / replace the champion
+#define MATCH_PROMOTE		(.625)	//	score needed to become / replace the champion
 #define MATCH_RANDOM_PLIES	(2u)		//	opening plies played at random, otherwise two deterministic nets replay one game
 #define MATCH_MAX_PLIES		(400u)	//	safety net: a game that long is a draw
 #ifdef _DEBUG

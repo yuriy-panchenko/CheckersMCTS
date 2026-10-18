@@ -10,6 +10,7 @@ using namespace game;
 using namespace mcts;
 
 #define CHAMPION_LEGACY_FILENAME	_T("champion.bin")	//	before the game number moved into the file name
+#define CHAMPION_FOLDER				L"champ"				//	champion_<game>.bin lives in data/champ/ (older ones may still sit in data/)
 #define CHAMPION_PREFIX				L"champion_"			//	champion_<training game>.bin
 #define CHAMPION_EXT				L".bin"
 #define MATCHES_FILENAME	_T("matches.csv")
@@ -18,10 +19,10 @@ namespace
 {
 	std::filesystem::path ChampionPath(size_t game)
 	{
-		return std::filesystem::path{ std::wstring{ CHAMPION_PREFIX } + std::to_wstring(game) + CHAMPION_EXT };
+		return std::filesystem::path{ CHAMPION_FOLDER } / (std::wstring{ CHAMPION_PREFIX } + std::to_wstring(game) + CHAMPION_EXT);
 	}
 
-	//	the champion_<game>.bin with the highest game number in the working directory; empty path if there is none
+	//	the champion_<game>.bin with the highest game number in champ/ or, for files not moved yet, in the working directory; empty path if there is none
 	std::filesystem::path FindChampion(size_t& game)
 	{
 		namespace fs = std::filesystem;
@@ -29,22 +30,26 @@ namespace
 		fs::path best;
 		game = 0;
 		std::error_code ec;
-		for (fs::directory_iterator it{ fs::path{ L"." }, ec }, end; !ec && it != end; it.increment(ec))
+		for (wchar_t const* dir : { CHAMPION_FOLDER, L"." })		//	a tie goes to champ/
 		{
-			fs::path const& p{ it->path() };
-			if (p.extension() != CHAMPION_EXT)
-				continue;
-			std::wstring const stem{ p.stem().wstring() };
-			if (stem.size() <= prefix.size() || stem.compare(0, prefix.size(), prefix) != 0)
-				continue;
-			std::wstring const digits{ stem.substr(prefix.size()) };
-			if (digits.size() > 18 || digits.find_first_not_of(L"0123456789") != std::wstring::npos)
-				continue;
-			size_t const n{ static_cast<size_t>(std::stoull(digits)) };
-			if (best.empty() || n > game)
+			ec.clear();
+			for (fs::directory_iterator it{ fs::path{ dir }, ec }, end; !ec && it != end; it.increment(ec))
 			{
-				best = p;
-				game = n;
+				fs::path const& p{ it->path() };
+				if (p.extension() != CHAMPION_EXT)
+					continue;
+				std::wstring const stem{ p.stem().wstring() };
+				if (stem.size() <= prefix.size() || stem.compare(0, prefix.size(), prefix) != 0)
+					continue;
+				std::wstring const digits{ stem.substr(prefix.size()) };
+				if (digits.size() > 18 || digits.find_first_not_of(L"0123456789") != std::wstring::npos)
+					continue;
+				size_t const n{ static_cast<size_t>(std::stoull(digits)) };
+				if (best.empty() || n > game)
+				{
+					best = p;
+					game = n;
+				}
 			}
 		}
 		return best;
@@ -282,6 +287,8 @@ void CMatchThread::SaveChampion()const
 {
 	namespace fs = std::filesystem;
 	fs::path const target{ ChampionPath(m_uChampionGame) };
+	std::error_code ec;
+	fs::create_directories(target.parent_path(), ec);
 	fs::path tmp{ target };
 	tmp.replace_extension(L".tmp");		//	never matches champion_<n>.bin: a half-written file cannot become "the latest champion"
 
@@ -297,7 +304,7 @@ void CMatchThread::SaveChampion()const
 			catch (const std::exception&) {}
 	}		//	closed (flushed) before the rename
 
-	std::error_code ec;
+	ec.clear();
 	if (ok)
 		fs::rename(tmp, target, ec);		//	replaces an existing file on Windows
 	if (!ok || ec)
