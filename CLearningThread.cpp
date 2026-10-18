@@ -19,6 +19,7 @@ using namespace mcts;
 #define VALUE_MIX_START	(.3)
 #define VALUE_MIX_GAMES	(1500.)
 #define MATERIAL_SCALE	(4.)
+#define THREAD_PRIORITY		THREAD_PRIORITY_IDLE
 #define NNET_FILENAME	_T("net.bin")
 #define STATS_FILENAME	_T("games.csv")
 
@@ -61,7 +62,7 @@ BOOL CLearningThread::InitInstance()
 	}
 
 	//	background matches: low priority, same notify window as ours
-	m_pMatchTh = static_cast<CMatchThread*>(::AfxBeginThread(RUNTIME_CLASS(CMatchThread), THREAD_PRIORITY_BELOW_NORMAL, 0, CREATE_SUSPENDED));
+	m_pMatchTh = static_cast<CMatchThread*>(::AfxBeginThread(RUNTIME_CLASS(CMatchThread), THREAD_PRIORITY, 0, CREATE_SUSPENDED));
 	if (m_pMatchTh)
 	{
 		m_pMatchTh->SetNotifyWnd(m_hNotify.load());
